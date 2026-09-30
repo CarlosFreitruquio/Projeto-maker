@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#061f2b">
+  <meta name="description" content="Acompanhe leituras de pH e a média de cada fonte de água. Demonstração com dados simulados, entrada manual e colagem de planilhas.">
+  <title>Aqua · Monitoramento de pH</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style.css">
+  <script defer src="data.js"></script>
+  <script defer src="water.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <canvas id="water" aria-hidden="true"></canvas>
+  <div class="ambient" aria-hidden="true"></div>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Aqua, início"><svg viewBox="0 0 32 38" aria-hidden="true"><path d="M16 2C12 9 3 18 3 24a13 13 0 0 0 26 0C29 18 20 9 16 2Z" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 25c5 4 10-4 16 0" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>aqua<span class="brand-dot">.</span></span></a>
+      <div class="top-actions"><span class="demo-badge">Dados simulados</span><span class="divider"></span><button id="simulation" class="button subtle" aria-pressed="true"><span class="pause-icon" aria-hidden="true">Ⅱ</span><span id="simulation-label">Pausar simulação</span></button><label class="source-toggle"><input type="checkbox" id="second-source"><span class="switch" aria-hidden="true"></span><span>Segunda fonte</span></label></div>
+    </header>
+    <main>
+      <div class="page-heading"><div><p class="eyebrow">ACOMPANHAMENTO EM TEMPO REAL</p><h1>Monitoramento da água</h1></div><div class="live-state"><span id="live-dot" class="live-dot"></span><span id="live-label">Nova leitura a cada 5 s</span></div></div>
+      <div id="panels" class="panels"></div>
+    </main>
+    <footer class="footer"><span><span class="footer-wave" aria-hidden="true">≈</span> Média aritmética · todo o histórico</span><span id="storage-status">Histórico salvo neste navegador</span></footer>
+  </div>
+  <dialog id="entry-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-heading"><div><p class="eyebrow">NOVA LEITURA</p><h2 id="dialog-title">Adicionar dados</h2></div><button id="close-dialog" class="icon-button" aria-label="Fechar janela">×</button></div>
+    <label class="field-label" for="target-source">Fonte de destino</label><select id="target-source"><option value="fonte-1">Fonte 01</option><option value="fonte-2">Fonte 02</option></select>
+    <div class="entry-tabs" role="tablist" aria-label="Modo de entrada"><button id="manual-tab" role="tab" aria-selected="true" aria-controls="manual-panel" tabindex="0">Preencher pH</button><button id="paste-tab" role="tab" aria-selected="false" aria-controls="paste-panel" tabindex="-1">Colar dados</button></div>
+    <form id="entry-form" novalidate>
+      <div id="manual-panel" role="tabpanel" aria-labelledby="manual-tab"><label class="field-label" for="ph-input">Valor de pH</label><div class="input-unit"><input id="ph-input" inputmode="decimal" placeholder="Ex.: 7,25" autocomplete="off" aria-describedby="input-help entry-error"><span>pH</span></div><p id="input-help" class="field-help">De 0 a 14. Use ponto ou vírgula decimal.</p></div>
+      <div id="paste-panel" role="tabpanel" aria-labelledby="paste-tab" hidden><label class="field-label" for="paste-input">Cole uma coluna de valores</label><textarea id="paste-input" rows="5" placeholder="6,80&#10;7,25&#10;7,10" aria-describedby="paste-help entry-error"></textarea><p id="paste-help" class="field-help">Uma leitura por linha, sem cabeçalho. Linhas vazias são ignoradas.</p><div id="paste-preview" class="paste-preview" aria-live="polite">A prévia aparece aqui antes de importar.</div></div>
+      <p id="entry-error" class="error" role="alert"></p>
+      <div class="dialog-footer"><span>O horário será o da inclusão.</span><button id="submit-entry" type="submit" class="button primary">Adicionar leitura</button></div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
