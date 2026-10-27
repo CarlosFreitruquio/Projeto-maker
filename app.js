@@ -53,6 +53,70 @@
       'Histórico anterior indisponível · sessão reiniciada';
   }
 
+  function getPhState(ph){
+    if(ph===null||ph===undefined) return null;
+    if(ph < 6.8){
+      return {
+        type: 'acid',
+        label: 'Ácida',
+        description: 'Água ácida (pH < 6.8)',
+        cssClass: 'status-pill-acid',
+        tagClass: 'tag-acid',
+        panelClass: 'panel-state-acid'
+      };
+    }
+    if(ph > 8.2){
+      return {
+        type: 'basic',
+        label: 'Básica',
+        description: 'Água básica (pH > 8.2)',
+        cssClass: 'status-pill-basic',
+        tagClass: 'tag-basic',
+        panelClass: 'panel-state-basic'
+      };
+    }
+    return {
+      type: 'normal',
+      label: 'Normal',
+      description: 'Água normal / neutra (pH 6.8 a 8.2)',
+      cssClass: 'status-pill-normal',
+      tagClass: 'tag-normal',
+      panelClass: 'panel-state-normal'
+    };
+  }
+
+  function getTurbidityState(ntu){
+    if(ntu===null||ntu===undefined) return null;
+    if(ntu <= 5.0){
+      return {
+        type: 'normal',
+        label: 'Normal',
+        description: 'Água límpida / normal (≤ 5.0 NTU)',
+        cssClass: 'status-pill-normal',
+        tagClass: 'tag-normal',
+        panelClass: 'panel-state-normal'
+      };
+    }
+    if(ntu <= 25.0){
+      return {
+        type: 'basic',
+        label: 'Moderada',
+        description: 'Turvação leve / moderada (5.1 a 25.0 NTU)',
+        cssClass: 'status-pill-basic',
+        tagClass: 'tag-basic',
+        panelClass: 'panel-state-basic'
+      };
+    }
+    return {
+      type: 'acid',
+      label: 'Elevada',
+      description: 'Água muito turva / crítica (> 25.0 NTU)',
+      cssClass: 'status-pill-acid',
+      tagClass: 'tag-acid',
+      panelClass: 'panel-state-acid'
+    };
+  }
+
   function save(){
     try{
       localStorage.setItem(
@@ -119,9 +183,18 @@
 
           </div>
 
-          <span class="source-index">
-            0${index+1}
-          </span>
+          <div class="header-right">
+            <div class="water-status-pill status-pill-normal"
+                 data-status-pill
+                 title="Condição da água (Ácida: < 6.8, Normal: 6.8 a 8.2, Básica: > 8.2)">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span class="status-text" data-status-text>Normal</span>
+            </div>
+
+            <span class="source-index">
+              0${index+1}
+            </span>
+          </div>
 
         </div>
 
@@ -154,7 +227,10 @@
               Última leitura
             </span>
 
-            <strong data-last>—</strong>
+            <div class="last-reading-row">
+              <strong data-last>—</strong>
+              <span class="last-status-tag tag-normal" data-last-tag>Normal</span>
+            </div>
             <small data-last-time></small>
           </div>
 
@@ -263,6 +339,26 @@
       pageCount
     );
 
+    const currentState=getPhState(last ? last.ph : average);
+    if(currentState){
+      panel.classList.remove('panel-state-acid','panel-state-normal','panel-state-basic');
+      panel.classList.add(currentState.panelClass);
+
+      const pill=panel.querySelector('[data-status-pill]');
+      if(pill){
+        pill.className=`water-status-pill ${currentState.cssClass}`;
+        pill.title=currentState.description;
+        const pillText=pill.querySelector('[data-status-text]');
+        if(pillText) pillText.textContent=currentState.label;
+      }
+
+      const tag=panel.querySelector('[data-last-tag]');
+      if(tag){
+        tag.className=`last-status-tag ${currentState.tagClass}`;
+        tag.textContent=currentState.label;
+      }
+    }
+
     panel.querySelector(
       '[data-mean]'
     ).textContent=
@@ -322,6 +418,7 @@
     };
 
     visible.forEach((reading,i)=>{
+      const rowState=getPhState(reading.ph);
       const tr=document.createElement('tr');
 
       if(
@@ -329,7 +426,7 @@
         i===0 &&
         pages[id]===1
       ){
-        tr.className='new-row';
+        tr.className=rowState ? `new-row-${rowState.type}` : 'new-row';
       }
 
       const n=document.createElement('td');
@@ -364,9 +461,19 @@
         origins[reading.origin];
 
       const p=document.createElement('td');
+      p.className='value-cell';
 
-      p.textContent=
+      if(rowState){
+        const dot=document.createElement('span');
+        dot.className=`row-status-dot dot-${rowState.type}`;
+        dot.title=rowState.description;
+        p.append(dot);
+      }
+
+      const pVal=document.createElement('span');
+      pVal.textContent=
         decimal.format(reading.ph);
+      p.append(pVal);
 
       tr.append(
         n,
@@ -436,6 +543,26 @@
     panel.dataset.page=
       String(page);
 
+    const currentTState=getTurbidityState(last ? last.ntu : average);
+    if(currentTState){
+      panel.classList.remove('panel-state-acid','panel-state-normal','panel-state-basic');
+      panel.classList.add(currentTState.panelClass);
+
+      const pill=$('turbidity-status-pill');
+      if(pill){
+        pill.className=`water-status-pill ${currentTState.cssClass}`;
+        pill.title=currentTState.description;
+        const pillText=$('turbidity-status-text');
+        if(pillText) pillText.textContent=currentTState.label;
+      }
+
+      const tag=$('turbidity-last-tag');
+      if(tag){
+        tag.className=`last-status-tag ${currentTState.tagClass}`;
+        tag.textContent=currentTState.label;
+      }
+    }
+
     $('turbidity-mean').textContent=
       average===null
         ? '—'
@@ -492,6 +619,7 @@
     };
 
     visible.forEach((reading,i)=>{
+      const rowState=getTurbidityState(reading.ntu);
       const tr=document.createElement('tr');
 
       if(
@@ -499,7 +627,7 @@
         i===0 &&
         page===1
       ){
-        tr.className='new-row';
+        tr.className=rowState ? `new-row-${rowState.type}` : 'new-row';
       }
 
       const n=document.createElement('td');
@@ -540,11 +668,21 @@
         origins[reading.origin];
 
       const v=document.createElement('td');
+      v.className='value-cell';
 
-      v.textContent=
+      if(rowState){
+        const dot=document.createElement('span');
+        dot.className=`row-status-dot dot-${rowState.type}`;
+        dot.title=rowState.description;
+        v.append(dot);
+      }
+
+      const vVal=document.createElement('span');
+      vVal.textContent=
         decimal.format(
           reading.ntu
         )+' NTU';
+      v.append(vVal);
 
       tr.append(
         n,
@@ -901,15 +1039,35 @@
       );
   }
 
+  function syncEntryFields(id){
+    if(id==='turbidez'){
+      $('dialog-title').textContent='Adicionar Turbidez';
+      $('manual-tab').textContent='Preencher NTU';
+      $('input-help').textContent='Valor em NTU igual ou maior que 0.';
+      $('ph-input').placeholder='Ex.: 4,80';
+      const unitSpan=$('ph-input').nextElementSibling;
+      if(unitSpan) unitSpan.textContent='NTU';
+    }else{
+      $('dialog-title').textContent='Adicionar dados';
+      $('manual-tab').textContent='Preencher pH';
+      $('input-help').textContent='De 0 a 14. Use ponto ou vírgula decimal.';
+      $('ph-input').placeholder='Ex.: 7,25';
+      const unitSpan=$('ph-input').nextElementSibling;
+      if(unitSpan) unitSpan.textContent='pH';
+    }
+  }
+
   function openEntry(id,nextMode){
-    $('target-source')
+    const optF2=$('target-source')
       .querySelector(
         'option[value="fonte-2"]'
-      )
-      .disabled=
-        !state.secondSource;
+      );
+    if(optF2){
+      optF2.disabled=!state.secondSource;
+    }
 
     $('target-source').value=id;
+    syncEntryFields(id);
 
     $('ph-input').value='';
     $('paste-input').value='';
@@ -924,6 +1082,11 @@
         : $('paste-input')
     ).focus();
   }
+
+  $('target-source').addEventListener('change', ()=>{
+    syncEntryFields($('target-source').value);
+    updatePreview();
+  });
 
   $('panels').addEventListener(
     'click',
@@ -1061,6 +1224,70 @@
         event.preventDefault();
 
         try{
+          const id=
+            $('target-source').value;
+
+          if(id==='turbidez'){
+            let tValues;
+
+            if(mode==='manual'){
+              const value=
+                D.parseTurbidity(
+                  $('ph-input').value
+                );
+
+              if(value===null){
+                $('ph-input')
+                  .setAttribute(
+                    'aria-invalid',
+                    'true'
+                  );
+
+                throw new Error(
+                  'Informe um valor de turbidez válido em NTU (≥ 0).'
+                );
+              }
+
+              tValues=[value];
+
+            }else{
+              const lines=
+                $('paste-input').value.split(/\r\n|\n|\r/);
+              tValues=
+                lines.map(l=>l.trim()).filter(Boolean).map(D.parseTurbidity);
+
+              if(tValues.some(v=>v===null)){
+                throw new Error(
+                  'Todas as linhas devem ser números em NTU (≥ 0).'
+                );
+              }
+
+              if(!tValues.length){
+                throw new Error(
+                  'Cole ao menos uma leitura de turbidez.'
+                );
+              }
+            }
+
+            $('turbidity-panel').dataset.page='1';
+            addTurbidity(
+              tValues,
+              mode==='manual' ? 'manual' : 'colado'
+            );
+
+            $('entry-dialog').close();
+
+            toast(
+              `${
+                tValues.length===1
+                  ? 'Turbidez adicionada'
+                  : tValues.length+' leituras de turbidez importadas'
+              } · média atualizada`
+            );
+
+            return;
+          }
+
           let values;
 
           if(mode==='manual'){
@@ -1185,6 +1412,11 @@
         renderTurbidity();
       }
     );
+
+  const turbidityAddBtn=$('turbidity-add-manual');
+  if(turbidityAddBtn){
+    turbidityAddBtn.addEventListener('click', ()=>openEntry('turbidez','manual'));
+  }
 
   async function disconnectSerial(){
     try{

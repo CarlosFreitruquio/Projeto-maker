@@ -101,7 +101,15 @@
 
           </div>
 
-          <span class="source-index">NTU</span>
+          <div class="header-right">
+            <div id="turbidity-status-pill"
+                 class="water-status-pill status-pill-normal"
+                 title="Condição da turbidez (Normal: <= 5 NTU, Moderada: 5 a 25 NTU, Elevada: > 25 NTU)">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span id="turbidity-status-text" class="status-text">Normal</span>
+            </div>
+            <span class="source-index">NTU</span>
+          </div>
 
         </div>
 
@@ -130,7 +138,10 @@
 
           <div class="stat-small">
             <span class="metric-label">Última leitura</span>
-            <strong id="turbidity-last">—</strong>
+            <div class="last-reading-row">
+              <strong id="turbidity-last">—</strong>
+              <span id="turbidity-last-tag" class="last-status-tag tag-normal">Normal</span>
+            </div>
             <small id="turbidity-last-time"></small>
           </div>
 
@@ -185,6 +196,15 @@
           </div>
         </div>
 
+        <div class="panel-actions">
+          <button id="turbidity-add-manual"
+                  class="button primary"
+                  type="button">
+            <span class="plus" aria-hidden="true">+</span>
+            Adicionar turbidez
+          </button>
+        </div>
+
         <div class="sensor-note">
           <span class="sensor-status-dot"
                 aria-hidden="true"></span>
@@ -237,8 +257,9 @@
     </label>
 
     <select id="target-source">
-      <option value="fonte-1">Fonte 01</option>
-      <option value="fonte-2">Fonte 02</option>
+      <option value="fonte-1">Fonte 01 (pH)</option>
+      <option value="fonte-2">Fonte 02 (pH)</option>
+      <option value="turbidez">Sensor de Turbidez (NTU)</option>
     </select>
 
     <div class="entry-tabs"

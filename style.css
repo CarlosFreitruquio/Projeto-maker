@@ -1187,3 +1187,316 @@ textarea{
     display:none
   }
 }
+
+/* ============================================================
+   Water Quality State & Sensor Animations (pH & Turbidity)
+   Vermelho: Ácida / Turbidez Elevada
+   Verde: Normal / Límpida
+   Branco: Básica / Moderada
+   ============================================================ */
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.water-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 13px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.water-status-pill .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+  position: relative;
+}
+
+.last-reading-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.last-status-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  line-height: 1.3;
+  transition: all 0.3s ease;
+}
+
+/* Value cell in tables */
+td.value-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.row-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------
+   ESTADO: ÁCIDO / ELEVADO (VERMELHO)
+   ------------------------------------------------------------ */
+
+.status-pill-acid {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #fca5a5;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.25);
+}
+
+.status-pill-acid .status-dot {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+  animation: pulse-radar-red 1.6s infinite cubic-bezier(0.25, 0, 0.25, 1);
+}
+
+.tag-acid {
+  background: rgba(239, 68, 68, 0.22);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+}
+
+.dot-acid {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.7);
+}
+
+.panel-state-acid {
+  border-color: rgba(239, 68, 68, 0.38) !important;
+  box-shadow: 0 20px 70px rgba(0, 18, 27, 0.45), 0 0 35px rgba(239, 68, 68, 0.15) !important;
+}
+
+.panel-state-acid::before {
+  background: linear-gradient(90deg, transparent, #ef4444, transparent) !important;
+  animation: glow-line-red 2s infinite ease-in-out;
+}
+
+.panel-state-acid .source-symbol {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+}
+
+.panel-state-acid .scale-marker {
+  background: #ef4444 !important;
+  box-shadow: 0 0 12px #ef4444, 0 0 20px rgba(239, 68, 68, 0.6) !important;
+}
+
+/* ------------------------------------------------------------
+   ESTADO: NORMAL / LÍMPIDO (VERDE)
+   ------------------------------------------------------------ */
+
+.status-pill-normal {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.55);
+  color: #86efac;
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.25);
+}
+
+.status-pill-normal .status-dot {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+  animation: pulse-radar-green 2.4s infinite cubic-bezier(0.25, 0, 0.25, 1);
+}
+
+.tag-normal {
+  background: rgba(34, 197, 94, 0.22);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  color: #86efac;
+}
+
+.dot-normal {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.7);
+}
+
+.panel-state-normal {
+  border-color: rgba(34, 197, 94, 0.35) !important;
+  box-shadow: 0 20px 70px rgba(0, 18, 27, 0.45), 0 0 35px rgba(34, 197, 94, 0.12) !important;
+}
+
+.panel-state-normal::before {
+  background: linear-gradient(90deg, transparent, #22c55e, transparent) !important;
+  animation: glow-line-green 3s infinite ease-in-out;
+}
+
+.panel-state-normal .source-symbol {
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.2);
+}
+
+.panel-state-normal .scale-marker {
+  background: #22c55e !important;
+  box-shadow: 0 0 12px #22c55e, 0 0 20px rgba(34, 197, 94, 0.6) !important;
+}
+
+/* ------------------------------------------------------------
+   ESTADO: BÁSICO / MODERADO (BRANCO)
+   ------------------------------------------------------------ */
+
+.status-pill-basic {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.65);
+  color: #ffffff;
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.3);
+}
+
+.status-pill-basic .status-dot {
+  background: #ffffff;
+  box-shadow: 0 0 9px #ffffff;
+  animation: pulse-radar-white 2s infinite cubic-bezier(0.25, 0, 0.25, 1);
+}
+
+.tag-basic {
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  color: #ffffff;
+}
+
+.dot-basic {
+  background: #ffffff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.85);
+}
+
+.panel-state-basic {
+  border-color: rgba(255, 255, 255, 0.45) !important;
+  box-shadow: 0 20px 70px rgba(0, 18, 27, 0.45), 0 0 40px rgba(255, 255, 255, 0.18) !important;
+}
+
+.panel-state-basic::before {
+  background: linear-gradient(90deg, transparent, #ffffff, transparent) !important;
+  animation: glow-line-white 2.2s infinite ease-in-out;
+}
+
+.panel-state-basic .source-symbol {
+  border-color: rgba(255, 255, 255, 0.55);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.3);
+}
+
+.panel-state-basic .scale-marker {
+  background: #ffffff !important;
+  box-shadow: 0 0 12px #ffffff, 0 0 22px rgba(255, 255, 255, 0.8) !important;
+}
+
+/* ------------------------------------------------------------
+   KEYFRAME ANIMATIONS
+   ------------------------------------------------------------ */
+
+@keyframes pulse-radar-red {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.85), 0 0 6px #ef4444;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0), 0 0 14px #ef4444;
+    transform: scale(1.15);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 0 6px #ef4444;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-radar-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.85), 0 0 6px #22c55e;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0), 0 0 14px #22c55e;
+    transform: scale(1.15);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0), 0 0 6px #22c55e;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-radar-white {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.95), 0 0 7px #ffffff;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(255, 255, 255, 0), 0 0 16px #ffffff;
+    transform: scale(1.15);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0), 0 0 7px #ffffff;
+    transform: scale(1);
+  }
+}
+
+@keyframes glow-line-red {
+  0%, 100% { opacity: 0.5; filter: drop-shadow(0 0 4px #ef4444); }
+  50% { opacity: 1; filter: drop-shadow(0 0 14px #ef4444); }
+}
+
+@keyframes glow-line-green {
+  0%, 100% { opacity: 0.5; filter: drop-shadow(0 0 4px #22c55e); }
+  50% { opacity: 1; filter: drop-shadow(0 0 14px #22c55e); }
+}
+
+@keyframes glow-line-white {
+  0%, 100% { opacity: 0.6; filter: drop-shadow(0 0 5px #ffffff); }
+  50% { opacity: 1; filter: drop-shadow(0 0 16px #ffffff); }
+}
+
+.new-row-acid td {
+  animation: arrive-acid 0.8s ease-out;
+}
+
+.new-row-normal td {
+  animation: arrive-normal 0.8s ease-out;
+}
+
+.new-row-basic td {
+  animation: arrive-basic 0.8s ease-out;
+}
+
+@keyframes arrive-acid {
+  from { background: rgba(239, 68, 68, 0.32); }
+  to { background: transparent; }
+}
+
+@keyframes arrive-normal {
+  from { background: rgba(34, 197, 94, 0.32); }
+  to { background: transparent; }
+}
+
+@keyframes arrive-basic {
+  from { background: rgba(255, 255, 255, 0.38); }
+  to { background: transparent; }
+}
