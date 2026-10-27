@@ -1,4 +1,4 @@
-/* Pure data functions shared by the interface and sensor adapter. */
+﻿/* Pure data functions shared by the interface and sensor adapter. */
 (function(root){
   'use strict';
 
@@ -52,6 +52,33 @@
         if(!raw.trim()) return;
 
         const value=parsePH(raw);
+
+        if(value===null){
+          invalid.push({
+            line:i+1,
+            value:raw
+          });
+        }else{
+          readings.push(value);
+        }
+      });
+
+    return {
+      readings,
+      invalid
+    };
+  }
+
+  function parseTurbidityColumn(text){
+    const readings=[];
+    const invalid=[];
+
+    String(text)
+      .split(/\r\n|\n|\r/)
+      .forEach((raw,i)=>{
+        if(!raw.trim()) return;
+
+        const value=parseTurbidity(raw);
 
         if(value===null){
           invalid.push({
@@ -166,7 +193,7 @@
       );
     }
 
-    if(!['simulado','manual','sensor'].includes(origin)){
+    if(!['simulado','manual','colado','sensor'].includes(origin)){
       throw new Error(
         'Origem de turbidez inválida.'
       );
@@ -319,6 +346,7 @@
         ![
           'simulado',
           'manual',
+          'colado',
           'sensor'
         ].includes(r.origin)
       ){
@@ -335,6 +363,7 @@
     parsePH,
     parseTurbidity,
     parseColumn,
+    parseTurbidityColumn,
     mean,
     meanTurbidity,
     receiveReadings,

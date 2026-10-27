@@ -1,4 +1,4 @@
-(function(){
+﻿(function(){
   'use strict';
 
   const D=window.AquaData;
@@ -916,10 +916,12 @@
   }
 
   function updatePreview(){
-    const parsed=
-      D.parseColumn(
-        $('paste-input').value
-      );
+    const targetSource=$('target-source')?.value;
+    const isTurbidity=targetSource==='turbidez';
+
+    const parsed=isTurbidity && typeof D.parseTurbidityColumn==='function'
+      ? D.parseTurbidityColumn($('paste-input').value)
+      : D.parseColumn($('paste-input').value);
 
     const preview=
       $('paste-preview');
@@ -936,7 +938,7 @@
       !parsed.invalid.length
     ){
       preview.textContent=
-        'A prévia aparece aqui antes de importar.';
+        'A prÃ©via aparece aqui antes de importar.';
     }else{
       const summary=
         document.createElement('div');
@@ -944,17 +946,16 @@
       summary.className=
         'preview-summary';
 
+      const unitStr=isTurbidity ? ' NTU' : '';
+      const meanVal=isTurbidity
+        ? D.meanTurbidity(parsed.readings.map(ntu=>({ntu})))
+        : D.mean(parsed.readings.map(ph=>({ph})));
+
       summary.textContent=
-        `${parsed.readings.length} leitura(s) válida(s)`+
+        `${parsed.readings.length} leitura(s) vÃ¡lida(s)`+
         (
           parsed.readings.length
-            ? ` · média ${decimal.format(
-                D.mean(
-                  parsed.readings.map(
-                    ph=>({ph})
-                  )
-                )
-              )}`
+            ? ` Â· mÃ©dia ${decimal.format(meanVal)}${unitStr}`
             : ''
         );
 
@@ -968,12 +969,12 @@
           parsed.readings
             .slice(0,8)
             .map(
-              ph=>decimal.format(ph)
+              val=>decimal.format(val)+(isTurbidity ? ' NTU' : '')
             )
-            .join(' · ')+
+            .join(' Â· ')+
           (
             parsed.readings.length>8
-              ? ' …'
+              ? ' â€¦'
               : ''
           );
 
@@ -992,10 +993,10 @@
             'preview-invalid';
 
           line.textContent=
-            `Linha ${item.line}: “${item.value.slice(
+            `Linha ${item.line}: â€œ${item.value.slice(
               0,
               50
-            )}” — informe um pH entre 0 e 14.`;
+            )}â€ â€” informe um ${isTurbidity ? 'valor em NTU (â‰¥ 0)' : 'pH entre 0 e 14'}.`;
 
           preview.append(line);
         });
@@ -1012,7 +1013,7 @@
         more.textContent=
           `E mais ${
             parsed.invalid.length-6
-          } linha(s) inválida(s).`;
+          } linha(s) invÃ¡lida(s).`;
 
         preview.append(more);
       }
@@ -1020,7 +1021,7 @@
 
     $('submit-entry').textContent=
       mode==='manual'
-        ? 'Adicionar leitura'
+        ? (isTurbidity ? 'Adicionar turbidez' : 'Adicionar leitura')
         : `Importar${
             parsed.readings.length
               ? ' '+parsed.readings.length
@@ -1047,13 +1048,15 @@
       $('ph-input').placeholder='Ex.: 4,80';
       const unitSpan=$('ph-input').nextElementSibling;
       if(unitSpan) unitSpan.textContent='NTU';
+      if(mode==='manual') $('submit-entry').textContent='Adicionar turbidez';
     }else{
       $('dialog-title').textContent='Adicionar dados';
       $('manual-tab').textContent='Preencher pH';
-      $('input-help').textContent='De 0 a 14. Use ponto ou vírgula decimal.';
+      $('input-help').textContent='De 0 a 14. Use ponto ou vÃ­rgula decimal.';
       $('ph-input').placeholder='Ex.: 7,25';
       const unitSpan=$('ph-input').nextElementSibling;
       if(unitSpan) unitSpan.textContent='pH';
+      if(mode==='manual') $('submit-entry').textContent='Adicionar leitura';
     }
   }
 
@@ -1331,9 +1334,6 @@
             values=
               parsed.readings;
           }
-
-          const id=
-            $('target-source').value;
 
           if(
             id==='fonte-2' &&

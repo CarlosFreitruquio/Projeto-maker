@@ -1,0 +1,24 @@
+{
+  "name": "aqua-backend",
+  "version": "1.0.0",
+  "description": "Servidor backend e API REST para monitoramento de sensores de pH e turbidez (Aqua)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "aqua",
+    "arduino",
+    "sensors",
+    "ph-sensor",
+    "turbidity-sensor",
+    "water-monitoring",
+    "web-serial",
+    "iot"
+  ],
+  "author": "Equipe Aqua",
+  "license": "MIT"
+}
+
