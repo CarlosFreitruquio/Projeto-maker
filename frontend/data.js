@@ -1,381 +1,179 @@
-﻿/* Pure data functions shared by the interface and sensor adapter. */
+/**
+ * Aqua — Módulo de Dados e Calibração de Turbidez
+ * Funções puras de cálculo, interpolação de calibração e classificação de qualidade.
+ */
 (function(root){
   'use strict';
 
-  function parsePH(raw){
-    if(typeof raw==='number'){
-      return Number.isFinite(raw)&&raw>=0&&raw<=14 ? raw : null;
+  /**
+   * Classifica a condição da água com base na porcentagem de turbidez (0% a 100%)
+   * Regras especificadas:
+   * - 0% a 30%: Baixa Turbidez (Água Limpa) -> "Estável"
+   * - 31% a 60%: Média Turbidez (Atenção)    -> "Atenção"
+   * - 61% a 100%: Alta Turbidez (Crítico)    -> "Perigo"
+   */
+  function getTurbidityStatus(percent){
+    if(percent === null || percent === undefined || Number.isNaN(percent)){
+      return {
+        type: 'neutral',
+        label: 'Sem Leitura',
+        cardClass: 'state-neutral',
+        badgeClass: 'badge-neutral',
+        dotClass: '',
+        description: 'Aguardando dados do sensor'
+      };
     }
 
-    if(typeof raw!=='string') return null;
+    const value = Math.max(0, Math.min(100, Number(percent)));
 
-    const value=raw.trim();
-
-    if(!/^(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(value)){
-      return null;
+    if(value <= 30.0){
+      return {
+        type: 'clean',
+        label: 'Estável',
+        cardClass: 'state-clean',
+        badgeClass: 'badge-clean',
+        dotClass: 'dot-clean',
+        description: 'Água Limpa (0% a 30%)'
+      };
     }
 
-    const number=Number(value.replace(',','.'));
-
-    return Number.isFinite(number)&&number>=0&&number<=14
-      ? number
-      : null;
-  }
-
-  function parseTurbidity(raw){
-    if(typeof raw==='number'){
-      return Number.isFinite(raw)&&raw>=0 ? raw : null;
+    if(value <= 60.0){
+      return {
+        type: 'warning',
+        label: 'Atenção',
+        cardClass: 'state-warning',
+        badgeClass: 'badge-warning',
+        dotClass: 'dot-warning',
+        description: 'Média Turbidez (31% a 60%)'
+      };
     }
-
-    if(typeof raw!=='string') return null;
-
-    const value=raw.trim();
-
-    if(!/^(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(value)){
-      return null;
-    }
-
-    const number=Number(value.replace(',','.'));
-
-    return Number.isFinite(number)&&number>=0
-      ? number
-      : null;
-  }
-
-  function parseColumn(text){
-    const readings=[];
-    const invalid=[];
-
-    String(text)
-      .split(/\r\n|\n|\r/)
-      .forEach((raw,i)=>{
-        if(!raw.trim()) return;
-
-        const value=parsePH(raw);
-
-        if(value===null){
-          invalid.push({
-            line:i+1,
-            value:raw
-          });
-        }else{
-          readings.push(value);
-        }
-      });
 
     return {
-      readings,
-      invalid
+      type: 'danger',
+      label: 'Perigo',
+      cardClass: 'state-danger',
+      badgeClass: 'badge-danger',
+      dotClass: 'dot-danger',
+      description: 'Alta Turbidez (61% a 100%)'
     };
   }
 
-  function parseTurbidityColumn(text){
-    const readings=[];
-    const invalid=[];
+  /**
+   * Converte tensão analógica (V) em Porcentagem de Turbidez
+   * utilizando os 2 pontos de calibração calibrados pelo usuário.
+   */
+  function calculatePercentFromVoltage(voltage, calib1, calib2){
+    if(voltage === null || voltage === undefined) return null;
+    const v = Number(voltage);
+    if(!Number.isFinite(v)) return null;
 
-    String(text)
-      .split(/\r\n|\n|\r/)
-      .forEach((raw,i)=>{
-        if(!raw.trim()) return;
+    // Se temos os dois pontos de calibração com tensões distintas
+    if(calib1 && calib2 && Number.isFinite(calib1.voltage) && Number.isFinite(calib2.voltage)){
+      const v1 = calib1.voltage;
+      const p1 = calib1.percent;
+      const v2 = calib2.voltage;
+      const p2 = calib2.percent;
 
-        const value=parseTurbidity(raw);
-
-        if(value===null){
-          invalid.push({
-            line:i+1,
-            value:raw
-          });
-        }else{
-          readings.push(value);
-        }
-      });
-
-    return {
-      readings,
-      invalid
-    };
-  }
-
-  function mean(readings){
-    if(!readings.length) return null;
-
-    let total=0;
-    let correction=0;
-
-    for(const reading of readings){
-      const adjusted=reading.ph-correction;
-      const next=total+adjusted;
-
-      correction=(next-total)-adjusted;
-      total=next;
-    }
-
-    return total/readings.length;
-  }
-
-  function meanTurbidity(readings){
-    if(!readings.length) return null;
-
-    let total=0;
-    let correction=0;
-
-    for(const reading of readings){
-      const adjusted=reading.ntu-correction;
-      const next=total+adjusted;
-
-      correction=(next-total)-adjusted;
-      total=next;
-    }
-
-    return total/readings.length;
-  }
-
-  function receiveReadings(
-    state,
-    sourceId,
-    values,
-    origin='sensor',
-    timestamp=new Date().toISOString()
-  ){
-    const source=state.sources.find(s=>s.id===sourceId);
-
-    if(!source){
-      throw new Error('Fonte de destino desconhecida.');
-    }
-
-    if(!Array.isArray(values)||!values.length){
-      throw new Error('Informe ao menos uma leitura.');
-    }
-
-    if(!['simulado','manual','colado','sensor'].includes(origin)){
-      throw new Error('Origem inválida.');
-    }
-
-    if(
-      typeof timestamp!=='string' ||
-      !Number.isFinite(Date.parse(timestamp))
-    ){
-      throw new Error('Horário inválido.');
-    }
-
-    const valid=values.map(parsePH);
-
-    if(valid.some(v=>v===null)){
-      throw new Error(
-        'Cada pH deve ser um número entre 0 e 14.'
-      );
-    }
-
-    const start=source.readings.length;
-
-    const added=valid.map((ph,i)=>({
-      id:sourceId+'-'+(start+i+1),
-      sourceId,
-      timestamp,
-      ph,
-      origin
-    }));
-
-    source.readings.push(...added);
-
-    return added;
-  }
-
-  function receiveTurbidity(
-    state,
-    values,
-    origin='sensor',
-    timestamp=new Date().toISOString()
-  ){
-    if(!Array.isArray(values)||!values.length){
-      throw new Error(
-        'Informe ao menos uma leitura de turbidez.'
-      );
-    }
-
-    if(!['simulado','manual','colado','sensor'].includes(origin)){
-      throw new Error(
-        'Origem de turbidez inválida.'
-      );
-    }
-
-    if(
-      typeof timestamp!=='string' ||
-      !Number.isFinite(Date.parse(timestamp))
-    ){
-      throw new Error('Horário inválido.');
-    }
-
-    const valid=values.map(parseTurbidity);
-
-    if(valid.some(v=>v===null)){
-      throw new Error(
-        'Cada turbidez deve ser um número igual ou maior que 0 NTU.'
-      );
-    }
-
-    const start=state.turbidityReadings.length;
-
-    const added=valid.map((ntu,i)=>({
-      id:'turbidez-'+(start+i+1),
-      timestamp,
-      ntu,
-      origin
-    }));
-
-    state.turbidityReadings.push(...added);
-
-    return added;
-  }
-
-  function seedState(now=Date.now()){
-    const state={
-      version:1,
-      secondSource:false,
-      running:true,
-      sources:[
-        {
-          id:'fonte-1',
-          readings:[]
-        },
-        {
-          id:'fonte-2',
-          readings:[]
-        }
-      ],
-      turbidityReadings:[]
-    };
-
-    const presets=[
-      [
-        7.12,7.08,7.21,7.16,
-        7.09,7.24,7.18,7.11,
-        7.23,7.19,7.14,7.17
-      ],
-      [
-        6.78,6.82,6.91,6.85,
-        6.79,6.88,6.94,6.87,
-        6.83,6.90,6.86,6.89
-      ]
-    ];
-
-    state.sources.forEach((s,index)=>{
-      presets[index].forEach((ph,i)=>{
-        receiveReadings(
-          state,
-          s.id,
-          [ph],
-          'simulado',
-          new Date(now-(11-i)*5000).toISOString()
-        );
-      });
-    });
-
-    const turbidity=[
-      4.8,5.2,4.6,5.1,
-      4.9,5.4,5.0,4.7,
-      5.3,5.1,4.9,5.2
-    ];
-
-    turbidity.forEach((ntu,i)=>{
-      receiveTurbidity(
-        state,
-        [ntu],
-        'simulado',
-        new Date(now-(11-i)*5000).toISOString()
-      );
-    });
-
-    return state;
-  }
-
-  function restoreState(raw){
-    const state=JSON.parse(raw);
-
-    if(
-      state.version!==1 ||
-      typeof state.running!=='boolean' ||
-      typeof state.secondSource!=='boolean' ||
-      !Array.isArray(state.sources) ||
-      state.sources.length!==2
-    ){
-      throw new Error('Histórico inválido.');
-    }
-
-    const ids=['fonte-1','fonte-2'];
-
-    state.sources.forEach((source,i)=>{
-      if(
-        source.id!==ids[i] ||
-        !Array.isArray(source.readings)
-      ){
-        throw new Error('Fonte inválida.');
+      if(Math.abs(v1 - v2) > 0.001){
+        // Interpolação linear entre os dois pontos
+        const slope = (p2 - p1) / (v2 - v1);
+        const calculated = p1 + slope * (v - v1);
+        return Math.max(0, Math.min(100, Number(calculated.toFixed(1))));
       }
-
-      source.readings.forEach(r=>{
-        if(
-          typeof r.id!=='string' ||
-          r.sourceId!==source.id ||
-          typeof r.ph!=='number' ||
-          parsePH(r.ph)===null ||
-          typeof r.timestamp!=='string' ||
-          !Number.isFinite(Date.parse(r.timestamp)) ||
-          ![
-            'simulado',
-            'manual',
-            'colado',
-            'sensor'
-          ].includes(r.origin)
-        ){
-          throw new Error('Leitura inválida.');
-        }
-      });
-    });
-
-    if(!Array.isArray(state.turbidityReadings)){
-      state.turbidityReadings=[];
     }
 
-    state.turbidityReadings.forEach(r=>{
-      if(
-        typeof r.id!=='string' ||
-        typeof r.ntu!=='number' ||
-        parseTurbidity(r.ntu)===null ||
-        typeof r.timestamp!=='string' ||
-        !Number.isFinite(Date.parse(r.timestamp)) ||
-        ![
-          'simulado',
-          'manual',
-          'colado',
-          'sensor'
-        ].includes(r.origin)
-      ){
-        throw new Error(
-          'Leitura de turbidez inválida.'
-        );
-      }
-    });
-
-    return state;
+    // Curva empírica padrão de sensores analógicos de turbidez (5V = 0%, 2.5V ou menos = 100%)
+    const defaultPercent = ((4.2 - v) / (4.2 - 2.5)) * 100;
+    return Math.max(0, Math.min(100, Number(defaultPercent.toFixed(1))));
   }
 
-  const api={
-    parsePH,
-    parseTurbidity,
-    parseColumn,
-    parseTurbidityColumn,
-    mean,
-    meanTurbidity,
-    receiveReadings,
-    receiveTurbidity,
-    seedState,
-    restoreState
+  /**
+   * Converte Porcentagem de Turbidez em valor estimado em NTU
+   * (Escala de 0 a 1000 NTU proporcional)
+   */
+  function percentToNTU(percent){
+    if(percent === null || percent === undefined) return null;
+    const p = Math.max(0, Math.min(100, Number(percent)));
+    // Mapeamento proporcional: 0% = ~0 NTU, 100% = ~1000 NTU (não-linear suave)
+    const ntu = (p / 100) * 800;
+    return Number(ntu.toFixed(1));
+  }
+
+  /**
+   * Interpreta uma linha de texto serial vinda do Arduino / ESP32
+   * Suporta formatos:
+   * - JSON: {"percent": 12.5, "voltage": 4.12, "ntu": 25.0}
+   * - CSV: "PERCENT,12.5" ou "VOLTAGE,4.12" ou "TURBIDITY,15.2"
+   * - Ponto direto: "P1,12.5,4.15" ou "P2,85.0,2.60"
+   * - Número puro: "4.12" ou "12.5"
+   */
+  function parseSerialData(line){
+    const clean = String(line).trim();
+    if(!clean) return null;
+
+    // 1. Formato JSON
+    if(clean.startsWith('{') && clean.endsWith('}')){
+      try{
+        const data = JSON.parse(clean);
+        return {
+          percent: data.percent !== undefined ? Number(data.percent) : null,
+          voltage: data.voltage !== undefined ? Number(data.voltage) : null,
+          ntu: data.ntu !== undefined ? Number(data.ntu) : null,
+          point: data.point || null
+        };
+      }catch{
+        return null;
+      }
+    }
+
+    // 2. Formato CSV / Comma Separated
+    const parts = clean.split(',').map(s => s.trim());
+    if(parts.length >= 2){
+      const header = parts[0].toUpperCase();
+      const val = Number(parts[1].replace(',', '.'));
+
+      if(Number.isFinite(val)){
+        if(header === 'PERCENT' || header === 'PORCENTAGEM' || header === 'TURBIDITY' || header === 'TURBIDEZ'){
+          return { percent: val, voltage: null, ntu: null, point: null };
+        }
+        if(header === 'VOLTAGE' || header === 'VOLT' || header === 'TENSAO'){
+          return { percent: null, voltage: val, ntu: null, point: null };
+        }
+        if(header === 'P1'){
+          const volt2 = parts[2] ? Number(parts[2].replace(',', '.')) : null;
+          return { percent: val, voltage: volt2, ntu: null, point: 1 };
+        }
+        if(header === 'P2'){
+          const volt2 = parts[2] ? Number(parts[2].replace(',', '.')) : null;
+          return { percent: val, voltage: volt2, ntu: null, point: 2 };
+        }
+      }
+    }
+
+    // 3. Número único
+    const directNum = Number(clean.replace(',', '.'));
+    if(Number.isFinite(directNum)){
+      // Se for menor ou igual a 5.0, tipicamente é tensão em Volts
+      if(directNum <= 5.0){
+        return { percent: null, voltage: directNum, ntu: null, point: null };
+      }
+      // Se for maior que 5.0, tipicamente é porcentagem
+      return { percent: directNum, voltage: null, ntu: null, point: null };
+    }
+
+    return null;
+  }
+
+  const api = {
+    getTurbidityStatus,
+    calculatePercentFromVoltage,
+    percentToNTU,
+    parseSerialData
   };
 
-  root.AquaData=api;
+  root.AquaTurbidityData = api;
 
-  if(typeof module!=='undefined'&&module.exports){
-    module.exports=api;
+  if(typeof module !== 'undefined' && module.exports){
+    module.exports = api;
   }
-
-})(typeof globalThis!=='undefined'?globalThis:this);
+})(typeof globalThis !== 'undefined' ? globalThis : this);

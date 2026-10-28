@@ -1,2047 +1,539 @@
-﻿(function(){
+/**
+ * Aqua — Monitoramento de Turbidez de Água
+ * Lógica da Interface, Web Serial API, Calibração em Dois Pontos e Histórico
+ * 100% livre de dados simulados (processamento exclusivamente de dados reais)
+ */
+
+(function(){
   'use strict';
 
-  const D=window.AquaData;
-  const KEY='aqua.ph.history.v1';
+  const D = window.AquaTurbidityData;
+  const STORAGE_KEY = 'aqua.turbidity.calibration.v2';
 
-  const $=id=>document.getElementById(id);
+  // Helper de seleção por ID
+  const $ = id => document.getElementById(id);
 
-  const decimal=new Intl.NumberFormat('pt-BR',{
-    minimumFractionDigits:2,
-    maximumFractionDigits:2
+  // Formatadores de Números e Horas
+  const percentFormat = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1
   });
 
-  const integer=new Intl.NumberFormat('pt-BR');
-
-  const clock=new Intl.DateTimeFormat('pt-BR',{
-    hour:'2-digit',
-    minute:'2-digit',
-    second:'2-digit'
+  const decimalFormat = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   });
 
-  const date=new Intl.DateTimeFormat('pt-BR',{
-    day:'2-digit',
-    month:'2-digit'
+  const voltageFormat = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3
   });
 
-  const pages={
-    'fonte-1':1,
-    'fonte-2':1
+  const timeFormat = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+
+  const dateFormat = new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit'
+  });
+
+  // Estado da Aplicação (Persistido no LocalStorage)
+  let state = {
+    calib1: {
+      percent: null,
+      voltage: null,
+      ntu: null,
+      timestamp: null
+    },
+    calib2: {
+      percent: null,
+      voltage: null,
+      ntu: null,
+      timestamp: null
+    },
+    history: []
   };
 
-  let state;
-  let storageWarning='';
-  let mode='manual';
-  let toastTimer;
-  let pageSize=6;
-  let resizeFrame;
-
-  let serialPort=null;
-  let serialReader=null;
-  let serialBuffer='';
-
-  try{
-    const raw=localStorage.getItem(KEY);
-
-    state=raw
-      ? D.restoreState(raw)
-      : D.seedState();
-
-  }catch{
-    state=D.seedState();
-    storageWarning=
-      'Histórico anterior indisponível · sessão reiniciada';
+  // Carregar dados salvos
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(parsed && typeof parsed === 'object'){
+        state = {
+          calib1: parsed.calib1 || state.calib1,
+          calib2: parsed.calib2 || state.calib2,
+          history: Array.isArray(parsed.history) ? parsed.history : []
+        };
+      }
+    }
+  } catch(e) {
+    console.warn('Não foi possível restaurar calibrações anteriores:', e);
   }
 
-  function getPhState(ph){
-    if(ph===null||ph===undefined) return null;
-    if(ph < 6.8){
-      return {
-        type: 'acid',
-        label: 'Ácida',
-        description: 'Água ácida (pH < 6.8)',
-        cssClass: 'status-pill-acid',
-        tagClass: 'tag-acid',
-        panelClass: 'panel-state-acid'
-      };
-    }
-    if(ph > 8.2){
-      return {
-        type: 'basic',
-        label: 'Básica',
-        description: 'Água básica (pH > 8.2)',
-        cssClass: 'status-pill-basic',
-        tagClass: 'tag-basic',
-        panelClass: 'panel-state-basic'
-      };
-    }
-    return {
-      type: 'normal',
-      label: 'Normal',
-      description: 'Água normal / neutra (pH 6.8 a 8.2)',
-      cssClass: 'status-pill-normal',
-      tagClass: 'tag-normal',
-      panelClass: 'panel-state-normal'
-    };
-  }
-
-  function getTurbidityState(ntu){
-    if(ntu===null||ntu===undefined) return null;
-    if(ntu <= 5.0){
-      return {
-        type: 'normal',
-        label: 'Normal',
-        description: 'Água límpida / normal (≤ 5.0 NTU)',
-        cssClass: 'status-pill-normal',
-        tagClass: 'tag-normal',
-        panelClass: 'panel-state-normal'
-      };
-    }
-    if(ntu <= 25.0){
-      return {
-        type: 'basic',
-        label: 'Moderada',
-        description: 'Turvação leve / moderada (5.1 a 25.0 NTU)',
-        cssClass: 'status-pill-basic',
-        tagClass: 'tag-basic',
-        panelClass: 'panel-state-basic'
-      };
-    }
-    return {
-      type: 'acid',
-      label: 'Elevada',
-      description: 'Água muito turva / crítica (> 25.0 NTU)',
-      cssClass: 'status-pill-acid',
-      tagClass: 'tag-acid',
-      panelClass: 'panel-state-acid'
-    };
-  }
-
-  function save(){
-    try{
-      localStorage.setItem(
-        KEY,
-        JSON.stringify(state)
-      );
-
-      $('storage-status').textContent=
-        storageWarning ||
-        'Histórico salvo neste navegador';
-
-    }catch{
-      $('storage-status').textContent=
-        'Sem salvamento · mantenha esta aba aberta';
+  function saveState(){
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch(e) {
+      console.warn('Erro ao salvar no localStorage:', e);
     }
   }
 
+  // Variáveis da Web Serial API
+  let serialPort = null;
+  let serialReader = null;
+  let serialBuffer = '';
+  let toastTimer = null;
+  let currentModalPoint = 1;
+  let lastLiveVoltage = null;
+
+  // Notificação Toast Visual
   function toast(message){
-    $('toast').textContent=message;
-    $('toast').classList.add('visible');
-
+    const el = $('toast');
+    if(!el) return;
+    el.textContent = message;
+    el.classList.add('visible');
     clearTimeout(toastTimer);
-
-    toastTimer=setTimeout(
-      ()=>$('toast').classList.remove('visible'),
-      3200
-    );
+    toastTimer = setTimeout(() => {
+      el.classList.remove('visible');
+    }, 3200);
   }
 
-  function sourceMarkup(source,index){
-    return `
-      <section class="panel"
-               data-source="${source.id}"
-               aria-labelledby="title-${source.id}">
+  // Atualização Visual de um Card de Calibração (Ponto 1 ou Ponto 2)
+  function renderCard(pointNumber){
+    const data = pointNumber === 1 ? state.calib1 : state.calib2;
+    const cardEl = $(`card-calib-${pointNumber}`);
+    const percentEl = $(`percent-calib-${pointNumber}`);
+    const badgeEl = $(`badge-calib-${pointNumber}`);
+    const barEl = $(`bar-fill-${pointNumber}`);
+    const markerEl = $(`marker-calib-${pointNumber}`);
+    const voltageEl = $(`voltage-calib-${pointNumber}`);
+    const ntuEl = $(`ntu-calib-${pointNumber}`);
+    const timeEl = $(`time-calib-${pointNumber}`);
 
-        <div class="panel-header">
+    if(!cardEl) return;
 
-          <div class="source-name">
+    const status = D.getTurbidityStatus(data.percent);
 
-            <span class="source-symbol"
-                  aria-hidden="true">
+    // 1. Atualizar Cores Dinâmicas do Card (Transição suave 0.3s)
+    cardEl.classList.remove('state-neutral', 'state-clean', 'state-warning', 'state-danger');
+    cardEl.classList.add(status.cardClass);
 
-              <svg viewBox="0 0 24 24"
-                   fill="none"
-                   stroke="currentColor"
-                   stroke-width="1.5">
+    // 2. Atualizar Badge de Status
+    badgeEl.className = `badge ${status.badgeClass}`;
+    badgeEl.textContent = status.label;
 
-                <path d="M12 2C9 7 5 11 5 15a7 7 0 0 0 14 0c0-4-4-8-7-13Z"/>
-                <path d="M8 16c3 2 5-2 8 0"/>
-
-              </svg>
-
-            </span>
-
-            <div>
-              <h2 id="title-${source.id}">
-                Fonte 0${index+1}
-              </h2>
-
-              <p class="source-description">
-                Ponto de coleta 0${index+1}
-              </p>
-            </div>
-
-          </div>
-
-          <div class="header-right">
-            <div class="water-status-pill status-pill-normal"
-                 data-status-pill
-                 title="Condição da água (Ácida: < 6.8, Normal: 6.8 a 8.2, Básica: > 8.2)">
-              <span class="status-dot" aria-hidden="true"></span>
-              <span class="status-text" data-status-text>Normal</span>
-            </div>
-
-            <span class="source-index">
-              0${index+1}
-            </span>
-          </div>
-
-        </div>
-
-        <div class="stats">
-
-          <div>
-            <span class="metric-label">
-              Média de pH
-            </span>
-
-            <div class="mean-value">
-              <span data-mean>—</span>
-              <span class="metric-unit">pH</span>
-            </div>
-
-            <div class="scale" aria-hidden="true">
-              <div class="scale-track ph-scale"></div>
-              <span class="scale-marker"></span>
-
-              <div class="scale-labels">
-                <span>0</span>
-                <span>7</span>
-                <span>14</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="stat-small">
-            <span class="metric-label">
-              Última leitura
-            </span>
-
-            <div class="last-reading-row">
-              <strong data-last>—</strong>
-              <span class="last-status-tag tag-normal" data-last-tag>Normal</span>
-            </div>
-            <small data-last-time></small>
-          </div>
-
-          <div class="stat-small">
-            <span class="metric-label">
-              Amostras
-            </span>
-
-            <strong data-count>0</strong>
-            <small>no histórico</small>
-          </div>
-
-        </div>
-
-        <div class="history-heading">
-          <h3>Histórico de leituras</h3>
-          <span>Mais recentes primeiro</span>
-        </div>
-
-        <div class="table-container">
-
-          <table aria-label="Leituras de pH da Fonte 0${index+1}">
-
-            <thead>
-              <tr>
-                <th scope="col">Nº</th>
-                <th scope="col">Horário</th>
-                <th scope="col">Origem</th>
-                <th scope="col">pH</th>
-              </tr>
-            </thead>
-
-            <tbody></tbody>
-
-          </table>
-
-        </div>
-
-        <div class="table-bottom">
-
-          <span data-range></span>
-
-          <div class="pagination">
-
-            <button class="icon-button"
-                    data-action="previous"
-                    aria-label="Página anterior da Fonte 0${index+1}">
-              ‹
-            </button>
-
-            <span class="page-text"
-                  data-page></span>
-
-            <button class="icon-button"
-                    data-action="next"
-                    aria-label="Próxima página da Fonte 0${index+1}">
-              ›
-            </button>
-
-          </div>
-
-        </div>
-
-        <div class="panel-actions">
-
-          <button class="button primary"
-                  data-action="manual">
-            <span class="plus" aria-hidden="true">+</span>
-            Adicionar leitura
-          </button>
-
-          <button class="button secondary"
-                  data-action="paste">
-            <span class="paste-icon" aria-hidden="true"></span>
-            Colar dados
-          </button>
-
-        </div>
-
-      </section>
-    `;
-  }
-
-  function renderSource(id,animate=false){
-    const source=state.sources.find(
-      s=>s.id===id
-    );
-
-    const panel=document.querySelector(
-      `[data-source="${id}"]`
-    );
-
-    if(!panel) return;
-
-    const readings=source.readings;
-    const average=D.mean(readings);
-    const last=readings.at(-1);
-
-    const pageCount=Math.max(
-      1,
-      Math.ceil(readings.length/pageSize)
-    );
-
-    pages[id]=Math.min(
-      pages[id],
-      pageCount
-    );
-
-    const currentState=getPhState(last ? last.ph : average);
-    if(currentState){
-      panel.classList.remove('panel-state-acid','panel-state-normal','panel-state-basic');
-      panel.classList.add(currentState.panelClass);
-
-      const pill=panel.querySelector('[data-status-pill]');
-      if(pill){
-        pill.className=`water-status-pill ${currentState.cssClass}`;
-        pill.title=currentState.description;
-        const pillText=pill.querySelector('[data-status-text]');
-        if(pillText) pillText.textContent=currentState.label;
-      }
-
-      const tag=panel.querySelector('[data-last-tag]');
-      if(tag){
-        tag.className=`last-status-tag ${currentState.tagClass}`;
-        tag.textContent=currentState.label;
-      }
+    // 3. Atualizar Porcentagem e Barra
+    if(data.percent !== null && Number.isFinite(data.percent)){
+      const formattedPercent = percentFormat.format(data.percent);
+      percentEl.innerHTML = `${formattedPercent}<span class="metric-symbol">%</span>`;
+      
+      const clampedPercent = Math.max(0, Math.min(100, data.percent));
+      barEl.style.width = `${clampedPercent}%`;
+      markerEl.style.left = `${clampedPercent}%`;
+    } else {
+      percentEl.innerHTML = `—<span class="metric-symbol">%</span>`;
+      barEl.style.width = '0%';
+      markerEl.style.left = '0%';
     }
 
-    panel.querySelector(
-      '[data-mean]'
-    ).textContent=
-      average===null
-        ? '—'
-        : decimal.format(average);
-
-    panel.querySelector(
-      '.scale-marker'
-    ).style.left=
-      (average===null
-        ? 50
-        : average/14*100)+'%';
-
-    panel.querySelector(
-      '[data-last]'
-    ).textContent=
-      last
-        ? decimal.format(last.ph)
-        : '—';
-
-    panel.querySelector(
-      '[data-last-time]'
-    ).textContent=
-      last
-        ? clock.format(
-            new Date(last.timestamp)
-          )
-        : '';
-
-    panel.querySelector(
-      '[data-count]'
-    ).textContent=
-      integer.format(readings.length);
-
-    const offset=
-      (pages[id]-1)*pageSize;
-
-    const visible=
-      readings
-        .slice()
-        .reverse()
-        .slice(
-          offset,
-          offset+pageSize
-        );
-
-    const body=panel.querySelector('tbody');
-
-    body.replaceChildren();
-
-    const origins={
-      simulado:'Simulação',
-      manual:'Manual',
-      colado:'Colagem',
-      sensor:'Sensor'
-    };
-
-    visible.forEach((reading,i)=>{
-      const rowState=getPhState(reading.ph);
-      const tr=document.createElement('tr');
-
-      if(
-        animate &&
-        i===0 &&
-        pages[id]===1
-      ){
-        tr.className=rowState ? `new-row-${rowState.type}` : 'new-row';
-      }
-
-      const n=document.createElement('td');
-
-      n.textContent=
-        String(
-          readings.length-offset-i
-        ).padStart(2,'0');
-
-      const t=document.createElement('td');
-      const time=document.createElement('time');
-      const day=document.createElement('small');
-
-      time.dateTime=reading.timestamp;
-      time.textContent=
-        clock.format(
-          new Date(reading.timestamp)
-        );
-
-      day.textContent=
-        date.format(
-          new Date(reading.timestamp)
-        );
-
-      time.append(day);
-      t.append(time);
-
-      const o=document.createElement('td');
-
-      o.className='origin';
-      o.textContent=
-        origins[reading.origin];
-
-      const p=document.createElement('td');
-      p.className='value-cell';
-
-      if(rowState){
-        const dot=document.createElement('span');
-        dot.className=`row-status-dot dot-${rowState.type}`;
-        dot.title=rowState.description;
-        p.append(dot);
-      }
-
-      const pVal=document.createElement('span');
-      pVal.textContent=
-        decimal.format(reading.ph);
-      p.append(pVal);
-
-      tr.append(
-        n,
-        t,
-        o,
-        p
-      );
-
-      body.append(tr);
-    });
-
-    panel.querySelector(
-      '[data-range]'
-    ).textContent=
-      readings.length
-        ? `${offset+1}–${Math.min(
-            offset+pageSize,
-            readings.length
-          )} de ${integer.format(
-            readings.length
-          )}`
-        : 'Sem leituras';
-
-    panel.querySelector(
-      '[data-page]'
-    ).textContent=
-      `${pages[id]} / ${pageCount}`;
-
-    panel.querySelector(
-      '[data-action="previous"]'
-    ).disabled=
-      pages[id]===1;
-
-    panel.querySelector(
-      '[data-action="next"]'
-    ).disabled=
-      pages[id]===pageCount;
-  }
-
-  function renderTurbidity(animate=false){
-    const readings=
-      state.turbidityReadings;
-
-    const average=
-      D.meanTurbidity(readings);
-
-    const last=
-      readings.at(-1);
-
-    const pageCount=Math.max(
-      1,
-      Math.ceil(
-        readings.length/pageSize
-      )
-    );
-
-    const panel=
-      $('turbidity-panel');
-
-    const page=Math.min(
-      Number(
-        panel.dataset.page||1
-      ),
-      pageCount
-    );
-
-    panel.dataset.page=
-      String(page);
-
-    const currentTState=getTurbidityState(last ? last.ntu : average);
-    if(currentTState){
-      panel.classList.remove('panel-state-acid','panel-state-normal','panel-state-basic');
-      panel.classList.add(currentTState.panelClass);
-
-      const pill=$('turbidity-status-pill');
-      if(pill){
-        pill.className=`water-status-pill ${currentTState.cssClass}`;
-        pill.title=currentTState.description;
-        const pillText=$('turbidity-status-text');
-        if(pillText) pillText.textContent=currentTState.label;
-      }
-
-      const tag=$('turbidity-last-tag');
-      if(tag){
-        tag.className=`last-status-tag ${currentTState.tagClass}`;
-        tag.textContent=currentTState.label;
-      }
-    }
-
-    $('turbidity-mean').textContent=
-      average===null
-        ? '—'
-        : decimal.format(average);
-
-    $('turbidity-last').textContent=
-      last
-        ? decimal.format(last.ntu)
-        : '—';
-
-    $('turbidity-last-time').textContent=
-      last
-        ? clock.format(
-            new Date(last.timestamp)
-          )
-        : '';
-
-    $('turbidity-count').textContent=
-      integer.format(
-        readings.length
-      );
-
-    $('turbidity-marker').style.left=
-      (
-        average===null
-          ? 10
-          : Math.min(
-              100,
-              average/100*100
-            )
-      )+'%';
-
-    const offset=
-      (page-1)*pageSize;
-
-    const visible=
-      readings
-        .slice()
-        .reverse()
-        .slice(
-          offset,
-          offset+pageSize
-        );
-
-    const body=
-      $('turbidity-body');
-
-    body.replaceChildren();
-
-    const origins={
-      simulado:'Simulação',
-      manual:'Manual',
-      sensor:'Sensor'
-    };
-
-    visible.forEach((reading,i)=>{
-      const rowState=getTurbidityState(reading.ntu);
-      const tr=document.createElement('tr');
-
-      if(
-        animate &&
-        i===0 &&
-        page===1
-      ){
-        tr.className=rowState ? `new-row-${rowState.type}` : 'new-row';
-      }
-
-      const n=document.createElement('td');
-
-      n.textContent=
-        String(
-          readings.length-offset-i
-        ).padStart(2,'0');
-
-      const t=document.createElement('td');
-      const time=document.createElement('time');
-      const day=document.createElement('small');
-
-      time.dateTime=
-        reading.timestamp;
-
-      time.textContent=
-        clock.format(
-          new Date(
-            reading.timestamp
-          )
-        );
-
-      day.textContent=
-        date.format(
-          new Date(
-            reading.timestamp
-          )
-        );
-
-      time.append(day);
-      t.append(time);
-
-      const o=document.createElement('td');
-
-      o.className='origin';
-      o.textContent=
-        origins[reading.origin];
-
-      const v=document.createElement('td');
-      v.className='value-cell';
-
-      if(rowState){
-        const dot=document.createElement('span');
-        dot.className=`row-status-dot dot-${rowState.type}`;
-        dot.title=rowState.description;
-        v.append(dot);
-      }
-
-      const vVal=document.createElement('span');
-      vVal.textContent=
-        decimal.format(
-          reading.ntu
-        )+' NTU';
-      v.append(vVal);
-
-      tr.append(
-        n,
-        t,
-        o,
-        v
-      );
-
-      body.append(tr);
-    });
-
-    $('turbidity-range').textContent=
-      readings.length
-        ? `${offset+1}–${Math.min(
-            offset+pageSize,
-            readings.length
-          )} de ${integer.format(
-            readings.length
-          )}`
-        : 'Sem leituras';
-
-    $('turbidity-page').textContent=
-      `${page} / ${pageCount}`;
-
-    $('turbidity-prev').disabled=
-      page===1;
-
-    $('turbidity-next').disabled=
-      page===pageCount;
-  }
-
-  function resizeTables(){
-    const box=
-      document.querySelector(
-        '.table-container'
-      );
-
-    if(!box) return;
-
-    const available=
-      box.clientHeight-30;
-
-    pageSize=Math.max(
-      3,
-      Math.min(
-        12,
-        Math.floor(
-          available/37
-        )
-      )
-    );
-
-    document
-      .querySelectorAll(
-        '.table-container'
-      )
-      .forEach(el=>{
-        el.style.setProperty(
-          '--row-height',
-          Math.max(
-            24,
-            Math.min(
-              48,
-              Math.floor(
-                available/pageSize
-              )-1
-            )
-          )+'px'
-        );
-      });
-
-    state.sources.forEach(
-      s=>renderSource(s.id)
-    );
-
-    renderTurbidity();
-  }
-
-  function updateControls(){
-    $('second-source').checked=
-      state.secondSource;
-
-    $('simulation').setAttribute(
-      'aria-pressed',
-      String(state.running)
-    );
-
-    $('simulation-label').textContent=
-      state.running
-        ? 'Pausar simulação'
-        : 'Retomar simulação';
-
-    $('simulation')
-      .querySelector('.pause-icon')
-      .textContent=
-        state.running
-          ? 'Ⅱ'
-          : '▷';
-
-    $('live-label').textContent=
-      state.running
-        ? 'Nova leitura a cada 5 s'
-        : 'Simulação pausada';
-
-    $('live-dot').classList.toggle(
-      'paused',
-      !state.running
-    );
-  }
-
-  function renderPanels(){
-    const container=$('panels');
-
-    container.classList.toggle(
-      'dual',
-      state.secondSource
-    );
-
-    if(!container.children.length){
-      container.innerHTML=
-        sourceMarkup(
-          state.sources[0],
-          0
-        );
-    }
-
-    const second=
-      container.querySelector(
-        '[data-source="fonte-2"]'
-      );
-
-    if(
-      state.secondSource &&
-      !second
-    ){
-      container.insertAdjacentHTML(
-        'beforeend',
-        sourceMarkup(
-          state.sources[1],
-          1
-        )
-      );
-    }
-
-    if(
-      !state.secondSource &&
-      second
-    ){
-      second.remove();
-    }
-
-    updateControls();
-    resizeTables();
-  }
-
-  function add(
-    sourceId,
-    values,
-    origin,
-    timestamp
-  ){
-    const added=
-      D.receiveReadings(
-        state,
-        sourceId,
-        values,
-        origin,
-        timestamp
-      );
-
-    save();
-    renderSource(
-      sourceId,
-      true
-    );
-
-    return added;
-  }
-
-  function addTurbidity(
-    values,
-    origin,
-    timestamp
-  ){
-    const added=
-      D.receiveTurbidity(
-        state,
-        values,
-        origin,
-        timestamp
-      );
-
-    save();
-    renderTurbidity(true);
-
-    return added;
-  }
-
-  function setMode(next){
-    mode=next;
-
-    ['manual','paste']
-      .forEach(m=>{
-        const active=
-          m===mode;
-
-        $(m+'-tab')
-          .setAttribute(
-            'aria-selected',
-            String(active)
-          );
-
-        $(m+'-tab').tabIndex=
-          active
-            ? 0
-            : -1;
-
-        $(m+'-panel')
-          .hidden=!active;
-      });
-
-    $('entry-error')
-      .textContent='';
-
-    $('ph-input')
-      .removeAttribute(
-        'aria-invalid'
-      );
-
-    updatePreview();
-  }
-
-  function updatePreview(){
-    const targetSource=$('target-source')?.value;
-    const isTurbidity=targetSource==='turbidez';
-
-    const parsed=isTurbidity && typeof D.parseTurbidityColumn==='function'
-      ? D.parseTurbidityColumn($('paste-input').value)
-      : D.parseColumn($('paste-input').value);
-
-    const preview=
-      $('paste-preview');
-
-    preview.replaceChildren();
-
-    preview.classList.toggle(
-      'invalid',
-      parsed.invalid.length>0
-    );
-
-    if(
-      !parsed.readings.length &&
-      !parsed.invalid.length
-    ){
-      preview.textContent=
-        'A prÃ©via aparece aqui antes de importar.';
-    }else{
-      const summary=
-        document.createElement('div');
-
-      summary.className=
-        'preview-summary';
-
-      const unitStr=isTurbidity ? ' NTU' : '';
-      const meanVal=isTurbidity
-        ? D.meanTurbidity(parsed.readings.map(ntu=>({ntu})))
-        : D.mean(parsed.readings.map(ph=>({ph})));
-
-      summary.textContent=
-        `${parsed.readings.length} leitura(s) vÃ¡lida(s)`+
-        (
-          parsed.readings.length
-            ? ` Â· mÃ©dia ${decimal.format(meanVal)}${unitStr}`
-            : ''
-        );
-
-      preview.append(summary);
-
-      if(parsed.readings.length){
-        const values=
-          document.createElement('div');
-
-        values.textContent=
-          parsed.readings
-            .slice(0,8)
-            .map(
-              val=>decimal.format(val)+(isTurbidity ? ' NTU' : '')
-            )
-            .join(' Â· ')+
-          (
-            parsed.readings.length>8
-              ? ' â€¦'
-              : ''
-          );
-
-        preview.append(values);
-      }
-
-      parsed.invalid
-        .slice(0,6)
-        .forEach(item=>{
-          const line=
-            document.createElement(
-              'div'
-            );
-
-          line.className=
-            'preview-invalid';
-
-          line.textContent=
-            `Linha ${item.line}: â€œ${item.value.slice(
-              0,
-              50
-            )}â€ â€” informe um ${isTurbidity ? 'valor em NTU (â‰¥ 0)' : 'pH entre 0 e 14'}.`;
-
-          preview.append(line);
-        });
-
-      if(parsed.invalid.length>6){
-        const more=
-          document.createElement(
-            'div'
-          );
-
-        more.className=
-          'preview-invalid';
-
-        more.textContent=
-          `E mais ${
-            parsed.invalid.length-6
-          } linha(s) invÃ¡lida(s).`;
-
-        preview.append(more);
-      }
-    }
-
-    $('submit-entry').textContent=
-      mode==='manual'
-        ? (isTurbidity ? 'Adicionar turbidez' : 'Adicionar leitura')
-        : `Importar${
-            parsed.readings.length
-              ? ' '+parsed.readings.length
-              : ''
-          } leitura${
-            parsed.readings.length===1
-              ? ''
-              : 's'
-          }`;
-
-    $('submit-entry').disabled=
-      mode==='paste' &&
-      (
-        !parsed.readings.length ||
-        parsed.invalid.length>0
-      );
-  }
-
-  function syncEntryFields(id){
-    if(id==='turbidez'){
-      $('dialog-title').textContent='Adicionar Turbidez';
-      $('manual-tab').textContent='Preencher NTU';
-      $('input-help').textContent='Valor em NTU igual ou maior que 0.';
-      $('ph-input').placeholder='Ex.: 4,80';
-      const unitSpan=$('ph-input').nextElementSibling;
-      if(unitSpan) unitSpan.textContent='NTU';
-      if(mode==='manual') $('submit-entry').textContent='Adicionar turbidez';
-    }else{
-      $('dialog-title').textContent='Adicionar dados';
-      $('manual-tab').textContent='Preencher pH';
-      $('input-help').textContent='De 0 a 14. Use ponto ou vÃ­rgula decimal.';
-      $('ph-input').placeholder='Ex.: 7,25';
-      const unitSpan=$('ph-input').nextElementSibling;
-      if(unitSpan) unitSpan.textContent='pH';
-      if(mode==='manual') $('submit-entry').textContent='Adicionar leitura';
+    // 4. Métricas Técnicas
+    voltageEl.textContent = data.voltage !== null ? `${voltageFormat.format(data.voltage)} V` : '— V';
+    ntuEl.textContent = data.ntu !== null ? `${decimalFormat.format(data.ntu)} NTU` : '— NTU';
+    
+    if(data.timestamp){
+      const dateObj = new Date(data.timestamp);
+      timeEl.textContent = `${dateFormat.format(dateObj)} às ${timeFormat.format(dateObj)}`;
+    } else {
+      timeEl.textContent = 'Aguardando calibração';
     }
   }
 
-  function openEntry(id,nextMode){
-    const optF2=$('target-source')
-      .querySelector(
-        'option[value="fonte-2"]'
-      );
-    if(optF2){
-      optF2.disabled=!state.secondSource;
-    }
-
-    $('target-source').value=id;
-    syncEntryFields(id);
-
-    $('ph-input').value='';
-    $('paste-input').value='';
-
-    setMode(nextMode);
-
-    $('entry-dialog').showModal();
-
-    (
-      nextMode==='manual'
-        ? $('ph-input')
-        : $('paste-input')
-    ).focus();
-  }
-
-  $('target-source').addEventListener('change', ()=>{
-    syncEntryFields($('target-source').value);
-    updatePreview();
-  });
-
-  $('panels').addEventListener(
-    'click',
-    event=>{
-      const button=
-        event.target.closest(
-          'button[data-action]'
-        );
-
-      if(!button) return;
-
-      const id=
-        button.closest(
-          '.panel'
-        ).dataset.source;
-
-      const action=
-        button.dataset.action;
-
-      if(
-        action==='manual' ||
-        action==='paste'
-      ){
-        openEntry(
-          id,
-          action
-        );
-      }else{
-        pages[id]+=
-          action==='next'
-            ? 1
-            : -1;
-
-        renderSource(id);
-      }
-    }
-  );
-
-  $('second-source')
-    .addEventListener(
-      'change',
-      ()=>{
-        state.secondSource=
-          $('second-source').checked;
-
-        save();
-        renderPanels();
-      }
-    );
-
-  $('simulation')
-    .addEventListener(
-      'click',
-      ()=>{
-        state.running=
-          !state.running;
-
-        save();
-        updateControls();
-      }
-    );
-
-  $('close-dialog')
-    .addEventListener(
-      'click',
-      ()=>$('entry-dialog').close()
-    );
-
-  ['manual','paste']
-    .forEach(m=>
-      $(m+'-tab')
-        .addEventListener(
-          'click',
-          ()=>setMode(m)
-        )
-    );
-
-  document
-    .querySelector('.entry-tabs')
-    .addEventListener(
-      'keydown',
-      event=>{
-        if([
-          'ArrowLeft',
-          'ArrowRight',
-          'Home',
-          'End'
-        ].includes(event.key)){
-          event.preventDefault();
-
-          setMode(
-            event.key==='Home'
-              ? 'manual'
-              : event.key==='End'
-                ? 'paste'
-                : mode==='manual'
-                  ? 'paste'
-                  : 'manual'
-          );
-
-          $(mode+'-tab').focus();
-        }
-      }
-    );
-
-  $('paste-input')
-    .addEventListener(
-      'input',
-      ()=>{
-        $('entry-error')
-          .textContent='';
-
-        updatePreview();
-      }
-    );
-
-  $('ph-input')
-    .addEventListener(
-      'input',
-      ()=>{
-        $('entry-error')
-          .textContent='';
-
-        $('ph-input')
-          .removeAttribute(
-            'aria-invalid'
-          );
-      }
-    );
-
-  $('entry-form')
-    .addEventListener(
-      'submit',
-      event=>{
-        event.preventDefault();
-
-        try{
-          const id=
-            $('target-source').value;
-
-          if(id==='turbidez'){
-            let tValues;
-
-            if(mode==='manual'){
-              const value=
-                D.parseTurbidity(
-                  $('ph-input').value
-                );
-
-              if(value===null){
-                $('ph-input')
-                  .setAttribute(
-                    'aria-invalid',
-                    'true'
-                  );
-
-                throw new Error(
-                  'Informe um valor de turbidez válido em NTU (≥ 0).'
-                );
-              }
-
-              tValues=[value];
-
-            }else{
-              const lines=
-                $('paste-input').value.split(/\r\n|\n|\r/);
-              tValues=
-                lines.map(l=>l.trim()).filter(Boolean).map(D.parseTurbidity);
-
-              if(tValues.some(v=>v===null)){
-                throw new Error(
-                  'Todas as linhas devem ser números em NTU (≥ 0).'
-                );
-              }
-
-              if(!tValues.length){
-                throw new Error(
-                  'Cole ao menos uma leitura de turbidez.'
-                );
-              }
-            }
-
-            $('turbidity-panel').dataset.page='1';
-            addTurbidity(
-              tValues,
-              mode==='manual' ? 'manual' : 'colado'
-            );
-
-            $('entry-dialog').close();
-
-            toast(
-              `${
-                tValues.length===1
-                  ? 'Turbidez adicionada'
-                  : tValues.length+' leituras de turbidez importadas'
-              } · média atualizada`
-            );
-
-            return;
-          }
-
-          let values;
-
-          if(mode==='manual'){
-            const value=
-              D.parsePH(
-                $('ph-input').value
-              );
-
-            if(value===null){
-              $('ph-input')
-                .setAttribute(
-                  'aria-invalid',
-                  'true'
-                );
-
-              throw new Error(
-                'Informe um pH válido entre 0 e 14.'
-              );
-            }
-
-            values=[value];
-
-          }else{
-            const parsed=
-              D.parseColumn(
-                $('paste-input').value
-              );
-
-            if(parsed.invalid.length){
-              throw new Error(
-                'Corrija as linhas inválidas antes de importar.'
-              );
-            }
-
-            if(!parsed.readings.length){
-              throw new Error(
-                'Cole ao menos uma leitura.'
-              );
-            }
-
-            values=
-              parsed.readings;
-          }
-
-          if(
-            id==='fonte-2' &&
-            !state.secondSource
-          ){
-            throw new Error(
-              'Ative a segunda fonte antes de adicionar leituras.'
-            );
-          }
-
-          pages[id]=1;
-
-          add(
-            id,
-            values,
-            mode==='manual'
-              ? 'manual'
-              : 'colado'
-          );
-
-          $('entry-dialog').close();
-
-          toast(
-            `${
-              values.length===1
-                ? 'Leitura adicionada'
-                : values.length+' leituras importadas'
-            } · média atualizada`
-          );
-
-        }catch(error){
-          $('entry-error')
-            .textContent=
-              error.message;
-        }
-      }
-    );
-
-  $('turbidity-prev')
-    .addEventListener(
-      'click',
-      ()=>{
-        const p=
-          Number(
-            $('turbidity-panel')
-              .dataset.page||1
-          );
-
-        $('turbidity-panel')
-          .dataset.page=
-            String(
-              Math.max(
-                1,
-                p-1
-              )
-            );
-
-        renderTurbidity();
-      }
-    );
-
-  $('turbidity-next')
-    .addEventListener(
-      'click',
-      ()=>{
-        const p=
-          Number(
-            $('turbidity-panel')
-              .dataset.page||1
-          );
-
-        $('turbidity-panel')
-          .dataset.page=
-            String(p+1);
-
-        renderTurbidity();
-      }
-    );
-
-  const turbidityAddBtn=$('turbidity-add-manual');
-  if(turbidityAddBtn){
-    turbidityAddBtn.addEventListener('click', ()=>openEntry('turbidez','manual'));
-  }
-
-  async function disconnectSerial(){
-    try{
-      if(serialReader){
-        await serialReader.cancel();
-      }
-    }catch{}
-
-    try{
-      if(serialReader){
-        serialReader.releaseLock();
-      }
-    }catch{}
-
-    serialReader=null;
-
-    try{
-      if(serialPort){
-        await serialPort.close();
-      }
-    }catch{}
-
-    serialPort=null;
-
-    $('sensor-connect')
-      .textContent=
-        'Conectar sensor';
-
-    $('sensor-status')
-      .textContent=
-        'Sensor não conectado';
-  }
-
-  function handleSerialLine(line){
-    const clean=line.trim();
-
-    if(!clean) return;
-
-    try{
-
-      if(clean.startsWith('{')){
-        const data=
-          JSON.parse(clean);
-
-        if(
-          D.parseTurbidity(
-            data.turbidity
-          )!==null
-        ){
-          addTurbidity(
-            [
-              D.parseTurbidity(
-                data.turbidity
-              )
-            ],
-            'sensor',
-            data.timestamp
-          );
-        }
-
-        if(
-          D.parsePH(data.ph)!==null
-        ){
-          const sourceId=
-            data.sourceId ||
-            'fonte-1';
-
-          add(
-            sourceId,
-            [
-              D.parsePH(data.ph)
-            ],
-            'sensor',
-            data.timestamp
-          );
-        }
-
-        return;
-      }
-
-      const parts=
-        clean
-          .split(',')
-          .map(v=>v.trim());
-
-      const type=
-        parts[0].toUpperCase();
-
-      if(
-        type==='TURBIDITY' ||
-        type==='TURBIDEZ'
-      ){
-        const value=
-          D.parseTurbidity(
-            parts[1]
-          );
-
-        if(value!==null){
-          addTurbidity(
-            [value],
-            'sensor',
-            parts[2] ||
-              new Date().toISOString()
-          );
-
-          toast(
-            'Nova leitura de turbidez recebida'
-          );
-        }
-
-      }else if(type==='PH'){
-
-        const value=
-          D.parsePH(
-            parts[1]
-          );
-
-        const sourceId=
-          parts[2] ||
-          'fonte-1';
-
-        if(value!==null){
-          add(
-            sourceId,
-            [value],
-            'sensor',
-            parts[3] ||
-              new Date().toISOString()
-          );
-
-          toast(
-            'Nova leitura de pH recebida'
-          );
-        }
-      }
-
-    }catch(error){
-      console.warn(
-        'Linha serial ignorada:',
-        error
-      );
-    }
-  }
-
-  async function readSerial(){
-    if(!serialPort?.readable){
+  // Renderizar a Lista do Histórico Lateral (Coluna 3)
+  function renderHistory(){
+    const listEl = $('history-list');
+    const countEl = $('history-count');
+    if(!listEl || !countEl) return;
+
+    countEl.textContent = `${state.history.length} registro${state.history.length === 1 ? '' : 's'}`;
+
+    if(state.history.length === 0){
+      listEl.innerHTML = `
+        <li class="history-empty">
+          <span class="empty-icon" aria-hidden="true">💧</span>
+          <p>Nenhuma leitura registrada.</p>
+          <small>Conecte o sensor ou execute uma calibração para iniciar.</small>
+        </li>
+      `;
       return;
     }
 
-    const decoder=
-      new TextDecoder();
+    listEl.replaceChildren();
 
-    try{
+    // Exibe os mais recentes primeiro
+    state.history.slice().reverse().forEach(item => {
+      const status = D.getTurbidityStatus(item.percent);
+      const li = document.createElement('li');
+      li.className = 'history-item';
 
-      serialReader=
-        serialPort.readable.getReader();
+      const dateObj = new Date(item.timestamp);
+      const formattedTime = timeFormat.format(dateObj);
+      const formattedDate = dateFormat.format(dateObj);
 
-      while(true){
+      li.innerHTML = `
+        <div class="history-item-left">
+          <span class="history-status-dot ${status.dotClass}" title="${status.description}"></span>
+          <div class="history-item-meta">
+            <span class="history-item-source">${item.source || 'Leitura Sensor'}</span>
+            <span class="history-item-time">${formattedDate} às ${formattedTime}</span>
+          </div>
+        </div>
+        <div class="history-item-right">
+          <span class="history-item-percent">${percentFormat.format(item.percent)}%</span>
+          <span class="history-item-ntu">${item.voltage !== null ? voltageFormat.format(item.voltage) + ' V' : decimalFormat.format(item.ntu) + ' NTU'}</span>
+        </div>
+      `;
 
-        const {
-          value,
-          done
-        }=
-          await serialReader.read();
+      listEl.appendChild(li);
+    });
+  }
 
-        if(done) break;
+  // Adicionar Leitura ao Histórico e Atualizar UI
+  function addHistoryReading(percent, voltage, ntu, source = 'Leitura Sensor'){
+    const entry = {
+      id: `reading-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      percent: Number(percent),
+      voltage: voltage !== null ? Number(voltage) : null,
+      ntu: ntu !== null ? Number(ntu) : D.percentToNTU(percent),
+      source,
+      timestamp: new Date().toISOString()
+    };
 
-        serialBuffer+=
-          decoder.decode(
-            value,
-            {stream:true}
-          );
+    state.history.push(entry);
+    // Limite máximo de 200 leituras no histórico para manter fluidez
+    if(state.history.length > 200){
+      state.history.shift();
+    }
 
-        const lines=
-          serialBuffer.split(
-            /\r?\n/
-          );
+    saveState();
+    renderHistory();
 
-        serialBuffer=
-          lines.pop() || '';
-
-        lines.forEach(
-          handleSerialLine
-        );
-      }
-
-    }catch(error){
-
-      if(serialPort){
-        toast(
-          'A conexão serial foi encerrada.'
-        );
-      }
-
-    }finally{
-
-      try{
-        serialReader?.releaseLock();
-      }catch{}
-
-      serialReader=null;
+    const syncEl = $('last-sync-time');
+    if(syncEl){
+      syncEl.textContent = `Última leitura: ${timeFormat.format(new Date())}`;
     }
   }
 
-  async function connectSerial(){
+  // Processar Linha de Dados Reais Vinda do Sensor Serial
+  function handleSerialLine(line){
+    const parsed = D.parseSerialData(line);
+    if(!parsed) return;
 
+    if(parsed.voltage !== null){
+      lastLiveVoltage = parsed.voltage;
+      const modalLiveVal = $('modal-live-value');
+      if(modalLiveVal){
+        modalLiveVal.textContent = `${voltageFormat.format(parsed.voltage)} V`;
+      }
+      const modalLiveTag = $('modal-live-status');
+      if(modalLiveTag){
+        modalLiveTag.textContent = 'Recebendo sinal estável';
+        modalLiveTag.style.color = '#16A34A';
+      }
+    }
+
+    // Se a mensagem especificar um ponto (P1 ou P2)
+    if(parsed.point === 1 || parsed.point === 2){
+      const p = parsed.point;
+      const percent = parsed.percent !== null ? parsed.percent : D.calculatePercentFromVoltage(parsed.voltage, state.calib1, state.calib2);
+      const voltage = parsed.voltage;
+      const ntu = parsed.ntu !== null ? parsed.ntu : D.percentToNTU(percent);
+
+      if(p === 1){
+        state.calib1 = { percent, voltage, ntu, timestamp: new Date().toISOString() };
+        renderCard(1);
+      } else {
+        state.calib2 = { percent, voltage, ntu, timestamp: new Date().toISOString() };
+        renderCard(2);
+      }
+
+      saveState();
+      addHistoryReading(percent, voltage, ntu, `Calibração Ponto ${p}`);
+      toast(`Dados recebidos para Calibração ${p}: ${percentFormat.format(percent)}%`);
+      return;
+    }
+
+    // Leitura contínua normal do sensor
+    let calcPercent = parsed.percent;
+    if(calcPercent === null && parsed.voltage !== null){
+      calcPercent = D.calculatePercentFromVoltage(parsed.voltage, state.calib1, state.calib2);
+    }
+
+    if(calcPercent !== null && Number.isFinite(calcPercent)){
+      const ntuVal = parsed.ntu !== null ? parsed.ntu : D.percentToNTU(calcPercent);
+      
+      // Atualizar o card ativo mais relevante ou o Ponto 2 (amostra em teste)
+      state.calib2.percent = calcPercent;
+      state.calib2.voltage = parsed.voltage !== null ? parsed.voltage : state.calib2.voltage;
+      state.calib2.ntu = ntuVal;
+      state.calib2.timestamp = new Date().toISOString();
+
+      renderCard(2);
+      addHistoryReading(calcPercent, parsed.voltage, ntuVal, 'Sensor Contínuo');
+    }
+  }
+
+  // Leitura do Stream Serial
+  async function readSerialStream(){
+    if(!serialPort?.readable) return;
+    const decoder = new TextDecoder();
+
+    try {
+      serialReader = serialPort.readable.getReader();
+      while(true){
+        const { value, done } = await serialReader.read();
+        if(done) break;
+
+        serialBuffer += decoder.decode(value, { stream: true });
+        const lines = serialBuffer.split(/\r?\n/);
+        serialBuffer = lines.pop() || '';
+
+        lines.forEach(handleSerialLine);
+      }
+    } catch(err) {
+      if(serialPort){
+        console.warn('Conexão serial encerrada:', err);
+        toast('Conexão serial encerrada.');
+      }
+    } finally {
+      try { serialReader?.releaseLock(); } catch{}
+      serialReader = null;
+    }
+  }
+
+  // Desconectar Porta Serial
+  async function disconnectSerial(){
+    try {
+      if(serialReader){
+        await serialReader.cancel();
+      }
+    } catch{}
+
+    try {
+      if(serialReader){
+        serialReader.releaseLock();
+      }
+    } catch{}
+    serialReader = null;
+
+    try {
+      if(serialPort){
+        await serialPort.close();
+      }
+    } catch{}
+    serialPort = null;
+
+    // Atualizar UI para Estado Desconectado
+    $('btn-connect').classList.remove('connected');
+    $('connect-pulse').className = 'status-pulse disconnected';
+    $('connect-label').textContent = 'Conectar Sensor';
+    
+    const textPill = $('hardware-status-text');
+    if(textPill){
+      textPill.className = 'status-text-pill';
+      textPill.textContent = 'Sensor desconectado';
+    }
+
+    toast('Sensor desconectado.');
+  }
+
+  // Conectar Porta Serial (Web Serial API)
+  async function connectSerial(){
     if(serialPort){
       await disconnectSerial();
       return;
     }
 
     if(!('serial' in navigator)){
-      toast(
-        'Este navegador não oferece Web Serial.'
-      );
-
+      toast('Este navegador não suporta a Web Serial API. Use o Google Chrome ou Microsoft Edge.');
       return;
     }
 
-    if(!window.isSecureContext){
-      toast(
-        'Conexão serial exige uma página HTTPS ou localhost.'
-      );
+    try {
+      serialPort = await navigator.serial.requestPort();
+      await serialPort.open({ baudRate: 9600 });
 
-      return;
-    }
+      // Atualizar UI para Estado Conectado com Efeito Pulse Verde
+      $('btn-connect').classList.add('connected');
+      $('connect-pulse').className = 'status-pulse connected';
+      $('connect-label').textContent = 'Desconectar';
 
-    try{
+      const textPill = $('hardware-status-text');
+      if(textPill){
+        textPill.className = 'status-text-pill connected';
+        textPill.textContent = 'Sensor conectado · 9600 baud';
+      }
 
-      serialPort=
-        await navigator.serial.requestPort();
-
-      await serialPort.open({
-        baudRate:9600
-      });
-
-      state.running=false;
-
-      save();
-      updateControls();
-
-      $('sensor-connect')
-        .textContent=
-          'Desconectar sensor';
-
-      $('sensor-status')
-        .textContent=
-          'Sensor conectado · 9600 baud';
-
-      toast(
-        'Sensor conectado. Simulação pausada.'
-      );
-
-      readSerial();
-
-    }catch(error){
-
-      serialPort=null;
-
-      if(
-        error?.name!=='NotFoundError'
-      ){
-        toast(
-          'Não foi possível conectar ao sensor.'
-        );
+      toast('Sensor conectado com sucesso via USB Serial!');
+      readSerialStream();
+    } catch(err) {
+      serialPort = null;
+      if(err?.name !== 'NotFoundError'){
+        console.error('Falha na conexão serial:', err);
+        toast('Não foi possível abrir a porta serial.');
       }
     }
   }
 
-  $('sensor-connect')
-    .addEventListener(
-      'click',
-      connectSerial
-    );
+  // Abrir Modal de Calibração
+  function openCalibModal(pointNumber){
+    currentModalPoint = pointNumber;
+    const dialog = $('calib-dialog');
+    if(!dialog) return;
 
-  window.addEventListener(
-    'resize',
-    ()=>{
-      cancelAnimationFrame(
-        resizeFrame
-      );
+    $('modal-eyebrow').textContent = `CALIBRAÇÃO · PONTO 0${pointNumber}`;
+    $('modal-calib-title').textContent = pointNumber === 1 ? 'Primeira Calibração (Água Limpa)' : 'Segunda Calibração (Amostra Turva)';
+    $('modal-description').textContent = pointNumber === 1 
+      ? 'Mergulhe o sensor na água de referência límpida (0% turbidez) e confirme o valor lido.'
+      : 'Mergulhe o sensor na amostra padrão ou turva para registrar o segundo ponto da curva de calibração.';
 
-      resizeFrame=
-        requestAnimationFrame(
-          resizeTables
-        );
+    // Pré-preencher valores
+    const currentCalib = pointNumber === 1 ? state.calib1 : state.calib2;
+    $('modal-input-percent').value = currentCalib.percent !== null ? currentCalib.percent : (pointNumber === 1 ? '0.0' : '100.0');
+    $('modal-input-voltage').value = lastLiveVoltage !== null ? lastLiveVoltage : (currentCalib.voltage !== null ? currentCalib.voltage : (pointNumber === 1 ? '4.150' : '2.500'));
+
+    const modalLiveVal = $('modal-live-value');
+    if(modalLiveVal){
+      modalLiveVal.textContent = lastLiveVoltage !== null ? `${voltageFormat.format(lastLiveVoltage)} V` : '— V';
     }
-  );
 
-  setInterval(
-    ()=>{
-      if(
-        !state.running ||
-        document.hidden ||
-        serialPort
-      ){
-        return;
-      }
-
-      state.sources
-        .filter(
-          (s,i)=>
-            i===0 ||
-            state.secondSource
-        )
-        .forEach(
-          (source,index)=>{
-            const lastSimulation=
-              source.readings.findLast(
-                r=>r.origin==='simulado'
-              );
-
-            const center=
-              index===0
-                ? 7.17
-                : 6.86;
-
-            const anchor=
-              lastSimulation?.ph ??
-              center;
-
-            const ph=
-              Number(
-                Math.min(
-                  14,
-                  Math.max(
-                    0,
-                    anchor*.75+
-                    center*.25+
-                    (Math.random()-.5)*.15
-                  )
-                ).toFixed(3)
-              );
-
-            add(
-              source.id,
-              [ph],
-              'simulado'
-            );
-          }
-        );
-
-      const lastT=
-        state.turbidityReadings.findLast(
-          r=>r.origin==='simulado'
-        );
-
-      const anchor=
-        lastT?.ntu ?? 5;
-
-      const ntu=
-        Number(
-          Math.max(
-            0,
-            anchor*.8+
-            5*.2+
-            (Math.random()-.5)*.8
-          ).toFixed(2)
-        );
-
-      addTurbidity(
-        [ntu],
-        'simulado'
-      );
-
-    },
-    5000
-  );
-
-  window.Aqua={
-
-    receiveReadings({
-      sourceId,
-      values,
-      origin='sensor',
-      timestamp
-    }){
-      return add(
-        sourceId,
-        values,
-        origin,
-        timestamp
-      );
-    },
-
-    receiveTurbidity({
-      values,
-      origin='sensor',
-      timestamp
-    }){
-      return addTurbidity(
-        values,
-        origin,
-        timestamp
-      );
-    },
-
-    getSummary(){
-      return state.sources
-        .filter(
-          (s,i)=>
-            i===0 ||
-            state.secondSource
-        )
-        .map(s=>({
-          sourceId:s.id,
-          count:s.readings.length,
-          mean:D.mean(
-            s.readings
-          ),
-          last:
-            s.readings.at(-1) ||
-            null
-        }));
-    },
-
-    getTurbiditySummary(){
-      return {
-        count:
-          state.turbidityReadings.length,
-
-        mean:
-          D.meanTurbidity(
-            state.turbidityReadings
-          ),
-
-        last:
-          state.turbidityReadings.at(-1) ||
-          null
-      };
-    }
-  };
-
-  renderPanels();
-  renderTurbidity();
-  save();
-
-  const context=
-    document.modelContext;
-
-  if(context?.registerTool){
-
-    const lifecycle=
-      new AbortController();
-
-    window.addEventListener(
-      'pagehide',
-      ()=>lifecycle.abort(),
-      {once:true}
-    );
-
-    const definitions=[
-
-      {
-        name:'read_ph_summary',
-        description:
-          'Read the count, arithmetic mean and last reading of each visible water source.',
-        inputSchema:{
-          type:'object',
-          properties:{},
-          additionalProperties:false
-        },
-        annotations:{
-          readOnlyHint:true
-        },
-        execute:
-          ()=>window.Aqua.getSummary()
-      },
-
-      {
-        name:'read_turbidity_summary',
-        description:
-          'Read the count, arithmetic mean and last turbidity reading in NTU.',
-        inputSchema:{
-          type:'object',
-          properties:{},
-          additionalProperties:false
-        },
-        annotations:{
-          readOnlyHint:true
-        },
-        execute:
-          ()=>window.Aqua.getTurbiditySummary()
-      },
-
-      {
-        name:'add_ph_readings',
-        description:
-          'Add one or more pH readings to an active water source.',
-        inputSchema:{
-          type:'object',
-          properties:{
-            sourceId:{
-              type:'string',
-              enum:[
-                'fonte-1',
-                'fonte-2'
-              ]
-            },
-            values:{
-              type:'array',
-              items:{
-                type:'number',
-                minimum:0,
-                maximum:14
-              },
-              minItems:1
-            }
-          },
-          required:[
-            'sourceId',
-            'values'
-          ],
-          additionalProperties:false
-        },
-        annotations:{
-          readOnlyHint:false
-        },
-        execute(input){
-
-          if(
-            !input ||
-            !Array.isArray(input.values) ||
-            input.values.some(
-              v=>typeof v!=='number'
-            ) ||
-            ![
-              'fonte-1',
-              'fonte-2'
-            ].includes(
-              input.sourceId
-            ) ||
-            (
-              input.sourceId==='fonte-2' &&
-              !state.secondSource
-            )
-          ){
-            throw new Error(
-              'Informe uma fonte ativa e valores de pH numéricos.'
-            );
-          }
-
-          add(
-            input.sourceId,
-            input.values,
-            'manual'
-          );
-
-          return window.Aqua
-            .getSummary()
-            .find(
-              s=>
-                s.sourceId===
-                input.sourceId
-            );
-        }
-      },
-
-      {
-        name:'add_turbidity_readings',
-        description:
-          'Add one or more turbidity readings in NTU.',
-        inputSchema:{
-          type:'object',
-          properties:{
-            values:{
-              type:'array',
-              items:{
-                type:'number',
-                minimum:0
-              },
-              minItems:1
-            }
-          },
-          required:['values'],
-          additionalProperties:false
-        },
-        annotations:{
-          readOnlyHint:false
-        },
-        execute(input){
-
-          if(
-            !input ||
-            !Array.isArray(input.values) ||
-            input.values.some(
-              v=>
-                typeof v!=='number' ||
-                v<0
-            )
-          ){
-            throw new Error(
-              'Informe valores de turbidez em NTU.'
-            );
-          }
-
-          addTurbidity(
-            input.values,
-            'manual'
-          );
-
-          return window.Aqua
-            .getTurbiditySummary();
-        }
-      }
-
-    ];
-
-    definitions.forEach(
-      tool=>{
-        try{
-          Promise
-            .resolve(
-              context.registerTool(
-                tool,
-                {
-                  signal:
-                    lifecycle.signal
-                }
-              )
-            )
-            .catch(()=>{});
-        }catch{}
-      }
-    );
+    dialog.showModal();
+    $('modal-input-percent').focus();
   }
+
+  // Salvar Calibração do Modal
+  function saveModalCalibration(){
+    const percentInput = $('modal-input-percent').value.trim();
+    const voltageInput = $('modal-input-voltage').value.trim();
+
+    const percent = percentInput !== '' ? Number(percentInput.replace(',', '.')) : null;
+    const voltage = voltageInput !== '' ? Number(voltageInput.replace(',', '.')) : null;
+
+    if(percent === null || Number.isNaN(percent) || percent < 0 || percent > 100){
+      toast('Informe uma porcentagem válida entre 0% e 100%.');
+      return;
+    }
+
+    if(voltage !== null && (Number.isNaN(voltage) || voltage < 0 || voltage > 5.0)){
+      toast('Informe uma tensão válida entre 0V e 5.0V.');
+      return;
+    }
+
+    const ntu = D.percentToNTU(percent);
+    const now = new Date().toISOString();
+
+    if(currentModalPoint === 1){
+      state.calib1 = { percent, voltage, ntu, timestamp: now };
+      renderCard(1);
+      toast(`Primeira Calibração registrada: ${percentFormat.format(percent)}%`);
+      addHistoryReading(percent, voltage, ntu, 'Primeira Calibração');
+    } else {
+      state.calib2 = { percent, voltage, ntu, timestamp: now };
+      renderCard(2);
+      toast(`Segunda Calibração registrada: ${percentFormat.format(percent)}%`);
+      addHistoryReading(percent, voltage, ntu, 'Segunda Calibração');
+    }
+
+    saveState();
+    $('calib-dialog').close();
+  }
+
+  // Exportar Histórico para CSV Tabular
+  function exportCSV(){
+    if(state.history.length === 0){
+      toast('Não há registros no histórico para exportar.');
+      return;
+    }
+
+    let csvContent = 'ID,Origem,Porcentagem_Turbidez,Tensao_Volts,NTU_Estimado,Data_Hora\r\n';
+    state.history.forEach(item => {
+      const row = [
+        item.id,
+        `"${item.source || 'Sensor'}"`,
+        item.percent,
+        item.voltage !== null ? item.voltage : '',
+        item.ntu !== null ? item.ntu : '',
+        `"${item.timestamp}"`
+      ];
+      csvContent += row.join(',') + '\r\n';
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `aqua_turbidez_historico_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast('Histórico exportado com sucesso em CSV!');
+  }
+
+  // Limpar Histórico de Leituras
+  function clearHistory(){
+    if(state.history.length === 0) return;
+    if(window.confirm('Tem certeza de que deseja limpar todo o histórico de leituras?')){
+      state.history = [];
+      saveState();
+      renderHistory();
+      toast('Histórico de leituras limpo.');
+    }
+  }
+
+  // ============================================================
+  // REGISTRO DE EVENTOS E INTERATIVIDADE
+  // ============================================================
+
+  // 1. Botão Conectar Sensor
+  $('btn-connect').addEventListener('click', connectSerial);
+
+  // 2. Botões de Ação do Header (Primeira e Segunda Calibração com espaçamento 12px)
+  $('btn-header-calib-1').addEventListener('click', () => openCalibModal(1));
+  $('btn-header-calib-2').addEventListener('click', () => openCalibModal(2));
+
+  // 3. Botões de Ação nos Cards
+  $('btn-card-calib-1').addEventListener('click', () => openCalibModal(1));
+  $('btn-card-calib-2').addEventListener('click', () => openCalibModal(2));
+
+  // 4. Modal de Calibração
+  $('btn-modal-close').addEventListener('click', () => $('calib-dialog').close());
+  $('btn-modal-cancel').addEventListener('click', () => $('calib-dialog').close());
+  $('btn-modal-save').addEventListener('click', saveModalCalibration);
+
+  // 5. Ações do Histórico (Exportar e Limpar)
+  $('btn-export-csv').addEventListener('click', exportCSV);
+  $('btn-clear-history').addEventListener('click', clearHistory);
+
+  // Fechar modal ao clicar fora da caixa
+  $('calib-dialog').addEventListener('click', e => {
+    const rect = $('calib-dialog').getBoundingClientRect();
+    if(
+      e.clientX < rect.left ||
+      e.clientX > rect.right ||
+      e.clientY < rect.top ||
+      e.clientY > rect.bottom
+    ){
+      $('calib-dialog').close();
+    }
+  });
+
+  // Inicialização da Interface
+  renderCard(1);
+  renderCard(2);
+  renderHistory();
 
 })();
