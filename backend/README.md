@@ -1,8 +1,8 @@
-# Aqua — Backend & API REST
+# Gota Limpa — Backend & API REST
 
-Este diretório contém o servidor de backend da plataforma **Aqua**, responsável por:
+Este diretório contém o servidor de backend da plataforma **Gota Limpa**, responsável por:
 1. **Entrega de Arquivos Estáticos:** Serve os arquivos do painel web localizados na pasta `frontend/`.
-2. **API REST de Telemetria:** Recebe e armazena leituras de sensores de pH e turbidez (NTU).
+2. **API REST de Telemetria:** Recebe e armazena leituras de sensores de turbidez (NTU).
 3. **Transmissão em Tempo Real:** Fornece um feed *Server-Sent Events* (`/api/stream`) para atualização instantânea dos clientes web.
 4. **Integração com Hardware:** Aceita dados enviados via Wi-Fi/Ethernet por microcontroladores (ESP32, ESP8266, Raspberry Pi Pico W, Arduino Uno R4 WiFi).
 
@@ -50,7 +50,7 @@ Retorna o estado de saúde do servidor, tempo de atividade e contagem de leitura
 ```json
 {
   "status": "online",
-  "service": "Aqua Water Monitoring API",
+  "service": "Gota Limpa Water Monitoring API",
   "version": "1.0.0",
   "startedAt": "2026-10-27T23:00:00.000Z",
   "uptimeSeconds": 120,

@@ -1,19 +1,23 @@
 <!doctype html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#F4F6F9">
-  <meta name="description" content="Aqua · Monitoramento de Turbidez de Água em tempo real com calibração e conexão serial direta.">
-  <title>Aqua · Monitoramento de Turbidez</title>
-  
+  <meta name="description"
+    content="Projeto Gota Limpa · Monitoramento de Turbidez de Água em tempo real com conexão serial direta.">
+  <title>Projeto Gota Limpa · Monitoramento de Turbidez</title>
+
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  
+
   <!-- Tipografia: Plus Jakarta Sans & Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus Jakarta Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-  
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus Jakarta Sans:wght@500;600;700;800&display=swap"
+    rel="stylesheet">
+
   <link rel="stylesheet" href="style.css">
   <script defer src="data.js"></script>
   <script defer src="app.js"></script>
@@ -21,46 +25,58 @@
 
 <body>
   <div class="app-container">
-    
+
     <!-- HEADER (Topo da Página) -->
     <header class="header">
       <div class="header-left">
-        <a class="brand" href="./" aria-label="Aqua início">
+        <a class="brand" href="./" aria-label="Gota Limoa início">
           <span class="brand-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+              stroke-linejoin="round">
               <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
             </svg>
           </span>
-          <span class="brand-name">Aqua<span class="brand-accent">.</span></span>
+          <span class="brand-name">Gota Limpa<span class="brand-accent">.</span></span>
         </a>
 
         <!-- Botão Conectar Sensor com Indicador Luminoso Pulsante -->
         <button id="btn-connect" class="btn btn-connect" type="button" aria-live="polite">
           <span id="connect-pulse" class="status-pulse disconnected" aria-hidden="true"></span>
-          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"></path>
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path
+              d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6">
+            </path>
             <line x1="2" y1="20" x2="2.01" y2="20"></line>
           </svg>
           <span id="connect-label">Conectar Sensor</span>
         </button>
       </div>
 
-      <!-- Lado Direito do Header: Ações de Calibração -->
+      <!-- Lado Direito do Header: Ações de Leitura e Reinício -->
       <div class="header-right">
-        <button id="btn-header-calib-1" class="btn btn-action" type="button" title="Realizar calibração com água de referência limpa">
-          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <button id="btn-header-calib-1" class="btn btn-action" type="button" title="Realizar primeira leitura">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="10"></circle>
             <path d="M12 6v6l4 2"></path>
           </svg>
-          <span>Primeira Calibração</span>
+          <span>Primeira Leitura</span>
         </button>
 
-        <button id="btn-header-calib-2" class="btn btn-action" type="button" title="Realizar calibração com amostra padrão / turva">
-          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <button id="btn-header-calib-2" class="btn btn-action" type="button" title="Realizar segunda leitura">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="10"></circle>
             <path d="M12 8v8M8 12h8"></path>
           </svg>
-          <span>Segunda Calibração</span>
+          <span>Segunda Leitura</span>
+        </button>
+
+        <!-- Botão Novo: Reiniciar Sistema / Limpar Cache -->
+        <button id="btn-hard-reset" class="btn btn-secondary" type="button"
+          title="Apaga dados salvos e reinicia a página">
+          Reiniciar / Limpar
         </button>
       </div>
     </header>
@@ -80,12 +96,12 @@
     <!-- CORPO PRINCIPAL: GRID DE 3 COLUNAS -->
     <main class="dashboard-grid">
 
-      <!-- COLUNA 1: Card da Primeira Calibração -->
+      <!-- COLUNA 1: Card da Primeira Leitura -->
       <article id="card-calib-1" class="card calib-card state-neutral" aria-labelledby="title-calib-1">
         <div class="card-header">
           <div>
             <span class="card-eyebrow">PONTO 01</span>
-            <h2 id="title-calib-1" class="card-title">Primeira Calibração</h2>
+            <h2 id="title-calib-1" class="card-title">Primeira Leitura</h2>
             <p class="card-subtitle">Água de Referência / Limpa</p>
           </div>
           <span id="badge-calib-1" class="badge badge-neutral">Sem Leitura</span>
@@ -127,20 +143,21 @@
 
         <div class="card-footer">
           <button id="btn-card-calib-1" class="btn btn-card-action" type="button">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
-            Calibrar Ponto 1
+            Registrar Primeira Leitura
           </button>
         </div>
       </article>
 
-      <!-- COLUNA 2: Card da Segunda Calibração -->
+      <!-- COLUNA 2: Card da Segunda Leitura -->
       <article id="card-calib-2" class="card calib-card state-neutral" aria-labelledby="title-calib-2">
         <div class="card-header">
           <div>
             <span class="card-eyebrow">PONTO 02</span>
-            <h2 id="title-calib-2" class="card-title">Segunda Calibração</h2>
+            <h2 id="title-calib-2" class="card-title">Segunda Leitura</h2>
             <p class="card-subtitle">Amostra em Teste / Solução</p>
           </div>
           <span id="badge-calib-2" class="badge badge-neutral">Sem Leitura</span>
@@ -182,10 +199,11 @@
 
         <div class="card-footer">
           <button id="btn-card-calib-2" class="btn btn-card-action" type="button">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
-            Calibrar Ponto 2
+            Registrar Segunda Leitura
           </button>
         </div>
       </article>
@@ -199,15 +217,19 @@
           </div>
 
           <div class="history-actions">
-            <button id="btn-export-csv" class="btn-icon-subtle" type="button" title="Exportar histórico em CSV" aria-label="Exportar histórico">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <button id="btn-export-csv" class="btn-icon-subtle" type="button" title="Exportar histórico em CSV"
+              aria-label="Exportar histórico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                 <polyline points="7 10 12 15 17 10"></polyline>
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
             </button>
-            <button id="btn-clear-history" class="btn-icon-subtle" type="button" title="Limpar histórico de leituras" aria-label="Limpar histórico">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <button id="btn-clear-history" class="btn-icon-subtle" type="button" title="Limpar histórico de leituras"
+              aria-label="Limpar histórico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
               </svg>
@@ -220,7 +242,7 @@
             <li class="history-empty">
               <span class="empty-icon" aria-hidden="true">💧</span>
               <p>Nenhuma leitura registrada.</p>
-              <small>Conecte o sensor ou execute uma calibração para iniciar.</small>
+              <small>Conecte o sensor e clique em Primeira ou Segunda Leitura.</small>
             </li>
           </ul>
         </div>
@@ -242,52 +264,28 @@
 
   </div>
 
-  <!-- MODAL / DIALOG DE CALIBRAÇÃO INTELIGENTE -->
+  <!-- MODAL / DIALOG DE CAPTURA COM 5 SEGUNDOS -->
   <dialog id="calib-dialog" class="calib-modal" aria-labelledby="modal-calib-title">
     <div class="modal-box">
       <div class="modal-header">
         <div>
-          <span id="modal-eyebrow" class="card-eyebrow">AJUSTE DE PARÂMETROS</span>
-          <h2 id="modal-calib-title" class="modal-title">Registrar Calibração</h2>
+          <span id="modal-eyebrow" class="card-eyebrow">ESTABILIZAÇÃO</span>
+          <h2 id="modal-calib-title" class="modal-title">Leitura do Sensor</h2>
         </div>
-        <button id="btn-modal-close" class="btn-modal-close" type="button" aria-label="Fechar janela">×</button>
       </div>
 
       <div class="modal-body">
         <p id="modal-description" class="modal-description">
-          Posicione o sensor na amostra de água e confirme a leitura capturada.
+          Mantenha o sensor na mesma posição por 5 segundos.
         </p>
 
         <div class="live-reading-box">
-          <span class="live-reading-label">LEITURA ATUAL DO SENSOR</span>
+          <span class="live-reading-label">LEITURA EM TEMPO REAL</span>
           <div class="live-reading-row">
             <strong id="modal-live-value" class="live-reading-value">— V</strong>
-            <span id="modal-live-status" class="live-reading-tag">Aguardando dados...</span>
+            <span id="modal-live-status" class="live-reading-tag">Contagem: 5s</span>
           </div>
         </div>
-
-        <div class="form-group">
-          <label for="modal-input-percent" class="form-label">Porcentagem de Turbidez de Referência (%)</label>
-          <div class="input-wrapper">
-            <input id="modal-input-percent" class="form-input" type="number" step="0.1" min="0" max="100" placeholder="Ex.: 0.0">
-            <span class="input-suffix">%</span>
-          </div>
-          <small class="form-help">Para o Ponto 1, recomenda-se 0.0% (água destilada / limpa). Para o Ponto 2, informe a concentração padrão.</small>
-        </div>
-
-        <div class="form-group">
-          <label for="modal-input-voltage" class="form-label">Tensão Lida (Volts)</label>
-          <div class="input-wrapper">
-            <input id="modal-input-voltage" class="form-input" type="number" step="0.001" min="0" max="5.0" placeholder="Ex.: 4.150">
-            <span class="input-suffix">V</span>
-          </div>
-          <small class="form-help">Preenchido automaticamente ao receber dados do sensor serial.</small>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button id="btn-modal-cancel" class="btn btn-secondary" type="button">Cancelar</button>
-        <button id="btn-modal-save" class="btn btn-primary" type="button">Confirmar Calibração</button>
       </div>
     </div>
   </dialog>
@@ -296,4 +294,5 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 </body>
+
 </html>

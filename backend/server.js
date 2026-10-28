@@ -1,5 +1,5 @@
 /**
- * Aqua — Servidor Backend & API REST
+ * Gota Limpa — Servidor Backend & API REST
  * 
  * Servidor HTTP em Node.js puro (sem dependências externas obrigatórias).
  * Funcionalidades:
@@ -211,7 +211,7 @@ const server = http.createServer(async (req, res) => {
   if (method === 'GET' && pathname === '/api/status') {
     sendJson(res, 200, {
       status: 'online',
-      service: 'Aqua Water Monitoring API',
+      service: 'Gota Limpa Water Monitoring API',
       version: '1.0.0',
       startedAt: store.startedAt,
       uptimeSeconds: Math.floor(process.uptime()),
@@ -350,7 +350,7 @@ const server = http.createServer(async (req, res) => {
       'Access-Control-Allow-Origin': '*'
     });
 
-    res.write(`event: connected\ndata: ${JSON.stringify({ message: 'Conectado ao feed Aqua SSE', timestamp: new Date().toISOString() })}\n\n`);
+    res.write(`event: connected\ndata: ${JSON.stringify({ message: 'Conectado ao feed Gota Limpa SSE', timestamp: new Date().toISOString() })}\n\n`);
     sseClients.add(res);
 
     req.on('close', () => {
@@ -375,7 +375,7 @@ const server = http.createServer(async (req, res) => {
       }
       res.writeHead(200, {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="aqua-dados.csv"',
+        'Content-Disposition': 'attachment; filename="gota-limpa-dados.csv"',
         'Access-Control-Allow-Origin': '*'
       });
       res.end(csv);
@@ -403,7 +403,7 @@ const server = http.createServer(async (req, res) => {
 // Inicialização do servidor
 server.listen(PORT, HOST, () => {
   console.log('====================================================');
-  console.log(` Servidor Aqua iniciado com sucesso!`);
+  console.log(` Servidor Gota Limpa iniciado com sucesso!`);
   console.log(` Endereço local:  http://localhost:${PORT}`);
   console.log(` Frontend ativo:  ${FRONTEND_DIR}`);
   console.log(` Endpoints API:`);
@@ -416,9 +416,9 @@ server.listen(PORT, HOST, () => {
 
 // Encerramento limpo
 function handleShutdown() {
-  console.log('\nFinalizando servidor Aqua...');
+  console.log('\nFinalizando servidor Gota Limpa...');
   for (const client of sseClients) {
-    try { client.end(); } catch {}
+    try { client.end(); } catch { }
   }
   server.close(() => {
     console.log('Servidor encerrado.');

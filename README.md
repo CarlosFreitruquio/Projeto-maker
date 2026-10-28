@@ -1,10 +1,10 @@
-# Aqua — Monitoramento de pH e Turbidez em Tempo Real
+# Gota Limpa — Monitoramento de pH e Turbidez em Tempo Real
 
 [![Publicar no GitHub Pages](https://github.com/seu-usuario/Projeto-maker/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/seu-usuario/Projeto-maker/actions/workflows/deploy-pages.yml)
 [![Licença MIT](https://img.shields.io/badge/licença-MIT-blue.svg)](LICENSE)
 [![Tecnologias](https://img.shields.io/badge/tecnologias-HTML5%20%7C%20CSS3%20%7C%20JS%20%7C%20WebGL%20%7C%20Node.js-cyan.svg)](#)
 
-O **Aqua** é um painel completo para monitoramento, análise e visualização de parâmetros de qualidade da água (pH e turbidez em NTU), com suporte a simulação procedimental em tempo real, integração direta com hardware (Arduino, ESP32 e microcontroladores) via **Web Serial API** e via **API REST**.
+O **Gota Limpa** é um painel completo para monitoramento, análise e visualização de parâmetros de qualidade da água (pH e turbidez em NTU), com suporte a simulação procedimental em tempo real, integração direta com hardware (Arduino, ESP32 e microcontroladores) via **Web Serial API** e via **API REST**.
 
 ---
 

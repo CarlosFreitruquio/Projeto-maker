@@ -1,4 +1,4 @@
-# Aqua — Painel de Monitoramento de pH e Turbidez
+# Gota Limpa — Painel de Monitoramento de pH e Turbidez
 
 Painel web em português para monitoramento de qualidade da água em tempo real, desenvolvido para projetos Maker, Arduino e feiras de ciências. Não precisa compilar dependências para rodar o cliente web.
 

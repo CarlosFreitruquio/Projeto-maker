@@ -1,8 +1,8 @@
 /**
- * Aqua — Módulo de Dados e Calibração de Turbidez
+ * Gota Limpa — Módulo de Dados e Calibração de Turbidez
  * Funções puras de cálculo, interpolação de calibração e classificação de qualidade.
  */
-(function(root){
+(function (root) {
   'use strict';
 
   /**
@@ -12,8 +12,8 @@
    * - 31% a 60%: Média Turbidez (Atenção)    -> "Atenção"
    * - 61% a 100%: Alta Turbidez (Crítico)    -> "Perigo"
    */
-  function getTurbidityStatus(percent){
-    if(percent === null || percent === undefined || Number.isNaN(percent)){
+  function getTurbidityStatus(percent) {
+    if (percent === null || percent === undefined || Number.isNaN(percent)) {
       return {
         type: 'neutral',
         label: 'Sem Leitura',
@@ -26,7 +26,7 @@
 
     const value = Math.max(0, Math.min(100, Number(percent)));
 
-    if(value <= 30.0){
+    if (value <= 30.0) {
       return {
         type: 'clean',
         label: 'Estável',
@@ -37,7 +37,7 @@
       };
     }
 
-    if(value <= 60.0){
+    if (value <= 60.0) {
       return {
         type: 'warning',
         label: 'Atenção',
@@ -62,19 +62,19 @@
    * Converte tensão analógica (V) em Porcentagem de Turbidez
    * utilizando os 2 pontos de calibração calibrados pelo usuário.
    */
-  function calculatePercentFromVoltage(voltage, calib1, calib2){
-    if(voltage === null || voltage === undefined) return null;
+  function calculatePercentFromVoltage(voltage, calib1, calib2) {
+    if (voltage === null || voltage === undefined) return null;
     const v = Number(voltage);
-    if(!Number.isFinite(v)) return null;
+    if (!Number.isFinite(v)) return null;
 
     // Se temos os dois pontos de calibração com tensões distintas
-    if(calib1 && calib2 && Number.isFinite(calib1.voltage) && Number.isFinite(calib2.voltage)){
+    if (calib1 && calib2 && Number.isFinite(calib1.voltage) && Number.isFinite(calib2.voltage)) {
       const v1 = calib1.voltage;
       const p1 = calib1.percent;
       const v2 = calib2.voltage;
       const p2 = calib2.percent;
 
-      if(Math.abs(v1 - v2) > 0.001){
+      if (Math.abs(v1 - v2) > 0.001) {
         // Interpolação linear entre os dois pontos
         const slope = (p2 - p1) / (v2 - v1);
         const calculated = p1 + slope * (v - v1);
@@ -91,8 +91,8 @@
    * Converte Porcentagem de Turbidez em valor estimado em NTU
    * (Escala de 0 a 1000 NTU proporcional)
    */
-  function percentToNTU(percent){
-    if(percent === null || percent === undefined) return null;
+  function percentToNTU(percent) {
+    if (percent === null || percent === undefined) return null;
     const p = Math.max(0, Math.min(100, Number(percent)));
     // Mapeamento proporcional: 0% = ~0 NTU, 100% = ~1000 NTU (não-linear suave)
     const ntu = (p / 100) * 800;
@@ -107,13 +107,13 @@
    * - Ponto direto: "P1,12.5,4.15" ou "P2,85.0,2.60"
    * - Número puro: "4.12" ou "12.5"
    */
-  function parseSerialData(line){
+  function parseSerialData(line) {
     const clean = String(line).trim();
-    if(!clean) return null;
+    if (!clean) return null;
 
     // 1. Formato JSON
-    if(clean.startsWith('{') && clean.endsWith('}')){
-      try{
+    if (clean.startsWith('{') && clean.endsWith('}')) {
+      try {
         const data = JSON.parse(clean);
         return {
           percent: data.percent !== undefined ? Number(data.percent) : null,
@@ -121,29 +121,29 @@
           ntu: data.ntu !== undefined ? Number(data.ntu) : null,
           point: data.point || null
         };
-      }catch{
+      } catch {
         return null;
       }
     }
 
     // 2. Formato CSV / Comma Separated
     const parts = clean.split(',').map(s => s.trim());
-    if(parts.length >= 2){
+    if (parts.length >= 2) {
       const header = parts[0].toUpperCase();
       const val = Number(parts[1].replace(',', '.'));
 
-      if(Number.isFinite(val)){
-        if(header === 'PERCENT' || header === 'PORCENTAGEM' || header === 'TURBIDITY' || header === 'TURBIDEZ'){
+      if (Number.isFinite(val)) {
+        if (header === 'PERCENT' || header === 'PORCENTAGEM' || header === 'TURBIDITY' || header === 'TURBIDEZ') {
           return { percent: val, voltage: null, ntu: null, point: null };
         }
-        if(header === 'VOLTAGE' || header === 'VOLT' || header === 'TENSAO'){
+        if (header === 'VOLTAGE' || header === 'VOLT' || header === 'TENSAO') {
           return { percent: null, voltage: val, ntu: null, point: null };
         }
-        if(header === 'P1'){
+        if (header === 'P1') {
           const volt2 = parts[2] ? Number(parts[2].replace(',', '.')) : null;
           return { percent: val, voltage: volt2, ntu: null, point: 1 };
         }
-        if(header === 'P2'){
+        if (header === 'P2') {
           const volt2 = parts[2] ? Number(parts[2].replace(',', '.')) : null;
           return { percent: val, voltage: volt2, ntu: null, point: 2 };
         }
@@ -152,9 +152,9 @@
 
     // 3. Número único
     const directNum = Number(clean.replace(',', '.'));
-    if(Number.isFinite(directNum)){
+    if (Number.isFinite(directNum)) {
       // Se for menor ou igual a 5.0, tipicamente é tensão em Volts
-      if(directNum <= 5.0){
+      if (directNum <= 5.0) {
         return { percent: null, voltage: directNum, ntu: null, point: null };
       }
       // Se for maior que 5.0, tipicamente é porcentagem
@@ -171,9 +171,9 @@
     parseSerialData
   };
 
-  root.AquaTurbidityData = api;
+  root.GotaLimpaTurbidityData = api;
 
-  if(typeof module !== 'undefined' && module.exports){
+  if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this);

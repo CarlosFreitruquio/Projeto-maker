@@ -1,5 +1,5 @@
 """
-Aqua — Servidor Backend em Python
+Gota Limpa — Servidor Backend em Python
 Suporta execução direta com a biblioteca padrão (http.server) ou com Flask/FastAPI se instalados.
 Entrega os arquivos estáticos de ../frontend e provê a API REST para sensores de pH e turbidez.
 """
@@ -25,7 +25,7 @@ store = {
     "turbidity": []
 }
 
-class AquaRequestHandler(SimpleHTTPRequestHandler):
+class GotaLimpRequestHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=FRONTEND_DIR, **kwargs)
 
@@ -54,7 +54,7 @@ class AquaRequestHandler(SimpleHTTPRequestHandler):
         if path == "/api/status":
             self._send_json(200, {
                 "status": "online",
-                "service": "Aqua Python Backend",
+                "service": "Gota Limpa Python Backend",
                 "version": "1.0.0",
                 "startedAt": store["startedAt"],
                 "counts": {
@@ -110,7 +110,7 @@ class AquaRequestHandler(SimpleHTTPRequestHandler):
                 body = "\n".join(lines).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/csv; charset=utf-8")
-                self.send_header("Content-Disposition", 'attachment; filename="aqua-dados.csv"')
+                self.send_header("Content-Disposition", 'attachment; filename="gota-limpa-dados.csv"')
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(body)
@@ -159,9 +159,9 @@ class AquaRequestHandler(SimpleHTTPRequestHandler):
 
 def run():
     server_address = ("0.0.0.0", PORT)
-    httpd = HTTPServer(server_address, AquaRequestHandler)
+    httpd = HTTPServer(server_address, GotaLimpaRequestHandler)
     print("=" * 52)
-    print(f" Servidor Aqua (Python) iniciado!")
+    print(f" Servidor Gota Limpa (Python) iniciado!")
     print(f" Endereço local:  http://localhost:{PORT}")
     print(f" Frontend servido de: {FRONTEND_DIR}")
     print("=" * 52)
