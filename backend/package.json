@@ -1,0 +1,23 @@
+{
+  "name": "gota-limpa-backend",
+  "version": "1.0.0",
+  "description": "Servidor backend e API REST para monitoramento de sensores de turbidez (Gota Limpa)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "gota-limpa",
+    "arduino",
+    "sensors",
+    "ph-sensor",
+    "turbidity-sensor",
+    "water-monitoring",
+    "web-serial",
+    "iot"
+  ],
+  "author": "Equipe Gota Limpa",
+  "license": "MIT"
+}

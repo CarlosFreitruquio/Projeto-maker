@@ -1,12 +1,12 @@
-(function(){
+(function () {
   'use strict';
-  const canvas=document.getElementById('water');
-  const gl=canvas.getContext('webgl',{alpha:false,antialias:false,powerPreference:'low-power'});
-  if(!gl){canvas.hidden=true;return;}
-  const vertex='attribute vec2 position; void main(){gl_Position=vec4(position,0.0,1.0);}';
+  const canvas = document.getElementById('water');
+  const gl = canvas.getContext('webgl', { alpha: false, antialias: false, powerPreference: 'low-power' });
+  if (!gl) { canvas.hidden = true; return; }
+  const vertex = 'attribute vec2 position; void main(){gl_Position=vec4(position,0.0,1.0);}';
   // A coastal grotto: textured cliffs, falling curtains, spray and a perspective sea.
   // All artwork is procedural; no remote images or assets are required.
-  const fragment=`precision highp float;
+  const fragment = `precision highp float;
     uniform vec2 resolution; uniform float time;
     float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
@@ -93,18 +93,18 @@
       color*=.72+.28*vignette;
       gl_FragColor=vec4(color,1.0);
     }`;
-  function compile(type,source){const shader=gl.createShader(type);gl.shaderSource(shader,source);gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)){gl.deleteShader(shader);throw new Error('Shader indisponível');}return shader;}
+  function compile(type, source) { const shader = gl.createShader(type); gl.shaderSource(shader, source); gl.compileShader(shader); if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) { gl.deleteShader(shader); throw new Error('Shader indisponível'); } return shader; }
   let program;
-  try{program=gl.createProgram();gl.attachShader(program,compile(gl.VERTEX_SHADER,vertex));gl.attachShader(program,compile(gl.FRAGMENT_SHADER,fragment));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error('Shader indisponível');}catch{canvas.hidden=true;return;}
-  gl.useProgram(program);const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
-  const position=gl.getAttribLocation(program,'position');gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
-  const res=gl.getUniformLocation(program,'resolution'),time=gl.getUniformLocation(program,'time'),reduced=matchMedia('(prefers-reduced-motion: reduce)');
-  let frame=0,previous=0,elapsed=0,lastDraw=0,lost=false;
-  function resize(){const scale=Math.min(1,1280/innerWidth,800/innerHeight);canvas.width=Math.round(innerWidth*scale);canvas.height=Math.round(innerHeight*scale);gl.viewport(0,0,canvas.width,canvas.height);gl.uniform2f(res,canvas.width,canvas.height);draw();}
-  function draw(){if(lost)return;gl.uniform1f(time,elapsed/1000);gl.drawArrays(gl.TRIANGLES,0,6);}
-  function loop(now){frame=0;if(document.hidden||reduced.matches||lost)return;if(previous)elapsed+=Math.min(now-previous,100);previous=now;if(now-lastDraw>=33){draw();lastDraw=now;}frame=requestAnimationFrame(loop);}
-  function resume(){cancelAnimationFrame(frame);previous=0;if(!document.hidden&&!reduced.matches&&!lost)frame=requestAnimationFrame(loop);else draw();}
-  window.addEventListener('resize',resize);document.addEventListener('visibilitychange',resume);reduced.addEventListener('change',resume);
-  canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();lost=true;cancelAnimationFrame(frame);canvas.hidden=true;});
-  resize();resume();
+  try { program = gl.createProgram(); gl.attachShader(program, compile(gl.VERTEX_SHADER, vertex)); gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragment)); gl.linkProgram(program); if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error('Shader indisponível'); } catch { canvas.hidden = true; return; }
+  gl.useProgram(program); const buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+  const position = gl.getAttribLocation(program, 'position'); gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+  const res = gl.getUniformLocation(program, 'resolution'), time = gl.getUniformLocation(program, 'time'), reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  let frame = 0, previous = 0, elapsed = 0, lastDraw = 0, lost = false;
+  function resize() { const scale = Math.min(1, 1280 / innerWidth, 800 / innerHeight); canvas.width = Math.round(innerWidth * scale); canvas.height = Math.round(innerHeight * scale); gl.viewport(0, 0, canvas.width, canvas.height); gl.uniform2f(res, canvas.width, canvas.height); draw(); }
+  function draw() { if (lost) return; gl.uniform1f(time, elapsed / 1000); gl.drawArrays(gl.TRIANGLES, 0, 6); }
+  function loop(now) { frame = 0; if (document.hidden || reduced.matches || lost) return; if (previous) elapsed += Math.min(now - previous, 100); previous = now; if (now - lastDraw >= 33) { draw(); lastDraw = now; } frame = requestAnimationFrame(loop); }
+  function resume() { cancelAnimationFrame(frame); previous = 0; if (!document.hidden && !reduced.matches && !lost) frame = requestAnimationFrame(loop); else draw(); }
+  window.addEventListener('resize', resize); document.addEventListener('visibilitychange', resume); reduced.addEventListener('change', resume);
+  canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); lost = true; cancelAnimationFrame(frame); canvas.hidden = true; });
+  resize(); resume();
 })();

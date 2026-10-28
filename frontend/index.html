@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#F4F6F9">
+  <meta name="description"
+    content="Projeto Gota Limpa · Monitoramento de Turbidez de Água em tempo real com conexão serial direta.">
+  <title>Projeto Gota Limpa · Monitoramento de Turbidez</title>
+
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <!-- Tipografia: Plus Jakarta Sans & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus Jakarta Sans:wght@500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+  <script defer src="data.js"></script>
+  <script defer src="app.js"></script>
+</head>
+
+<body>
+  <div class="app-container">
+
+    <!-- HEADER (Topo da Página) -->
+    <header class="header">
+      <div class="header-left">
+        <a class="brand" href="./" aria-label="Gota Limoa início">
+          <span class="brand-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+            </svg>
+          </span>
+          <span class="brand-name">Gota Limpa<span class="brand-accent">.</span></span>
+        </a>
+
+        <!-- Botão Conectar Sensor com Indicador Luminoso Pulsante -->
+        <button id="btn-connect" class="btn btn-connect" type="button" aria-live="polite">
+          <span id="connect-pulse" class="status-pulse disconnected" aria-hidden="true"></span>
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path
+              d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6">
+            </path>
+            <line x1="2" y1="20" x2="2.01" y2="20"></line>
+          </svg>
+          <span id="connect-label">Conectar Sensor</span>
+        </button>
+      </div>
+
+      <!-- Lado Direito do Header: Ações de Leitura e Reinício -->
+      <div class="header-right">
+        <button id="btn-header-calib-1" class="btn btn-action" type="button" title="Realizar primeira leitura">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 6v6l4 2"></path>
+          </svg>
+          <span>Primeira Leitura</span>
+        </button>
+
+        <button id="btn-header-calib-2" class="btn btn-action" type="button" title="Realizar segunda leitura">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 8v8M8 12h8"></path>
+          </svg>
+          <span>Segunda Leitura</span>
+        </button>
+
+        <!-- Botão Novo: Reiniciar Sistema / Limpar Cache -->
+        <button id="btn-hard-reset" class="btn btn-secondary" type="button"
+          title="Apaga dados salvos e reinicia a página">
+          Reiniciar / Limpar
+        </button>
+      </div>
+    </header>
+
+    <!-- BARRA DE STATUS / NOTIFICAÇÃO DO SISTEMA -->
+    <section class="status-bar" aria-label="Status do sistema">
+      <div class="status-info">
+        <span class="info-tag">SISTEMA ATIVO</span>
+        <h1 class="page-title">Monitoramento de Turbidez</h1>
+      </div>
+      <div class="sensor-connection-info">
+        <span id="hardware-status-text" class="status-text-pill">Sensor desconectado (aguardando porta serial)</span>
+        <span id="last-sync-time" class="last-sync">Nenhuma leitura recebida</span>
+      </div>
+    </section>
+
+    <!-- CORPO PRINCIPAL: GRID DE 3 COLUNAS -->
+    <main class="dashboard-grid">
+
+      <!-- COLUNA 1: Card da Primeira Leitura -->
+      <article id="card-calib-1" class="card calib-card state-neutral" aria-labelledby="title-calib-1">
+        <div class="card-header">
+          <div>
+            <span class="card-eyebrow">PONTO 01</span>
+            <h2 id="title-calib-1" class="card-title">Primeira Leitura</h2>
+            <p class="card-subtitle">Água de Referência / Limpa</p>
+          </div>
+          <span id="badge-calib-1" class="badge badge-neutral">Sem Leitura</span>
+        </div>
+
+        <div class="card-body">
+          <div class="metric-display">
+            <span id="percent-calib-1" class="metric-value">—<span class="metric-symbol">%</span></span>
+            <span class="metric-label">Turbidez Estimada</span>
+          </div>
+
+          <!-- Barra Visual de Turbidez com Marcador -->
+          <div class="turbidity-track" aria-hidden="true">
+            <div id="bar-fill-1" class="turbidity-fill" style="width: 0%;"></div>
+            <span id="marker-calib-1" class="turbidity-marker" style="left: 0%;"></span>
+          </div>
+          <div class="scale-ticks" aria-hidden="true">
+            <span>0% (Limpa)</span>
+            <span>50%</span>
+            <span>100% (Crítica)</span>
+          </div>
+
+          <!-- Grade de Informações Técnicas -->
+          <div class="metrics-grid">
+            <div class="metric-item">
+              <span class="sub-label">Tensão / ADC</span>
+              <strong id="voltage-calib-1" class="sub-value">— V</strong>
+            </div>
+            <div class="metric-item">
+              <span class="sub-label">Índice NTU</span>
+              <strong id="ntu-calib-1" class="sub-value">— NTU</strong>
+            </div>
+            <div class="metric-item metric-item-full">
+              <span class="sub-label">Horário do Registro</span>
+              <small id="time-calib-1" class="sub-value-time">—</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button id="btn-card-calib-1" class="btn btn-card-action" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Registrar Primeira Leitura
+          </button>
+        </div>
+      </article>
+
+      <!-- COLUNA 2: Card da Segunda Leitura -->
+      <article id="card-calib-2" class="card calib-card state-neutral" aria-labelledby="title-calib-2">
+        <div class="card-header">
+          <div>
+            <span class="card-eyebrow">PONTO 02</span>
+            <h2 id="title-calib-2" class="card-title">Segunda Leitura</h2>
+            <p class="card-subtitle">Amostra em Teste / Solução</p>
+          </div>
+          <span id="badge-calib-2" class="badge badge-neutral">Sem Leitura</span>
+        </div>
+
+        <div class="card-body">
+          <div class="metric-display">
+            <span id="percent-calib-2" class="metric-value">—<span class="metric-symbol">%</span></span>
+            <span class="metric-label">Turbidez Estimada</span>
+          </div>
+
+          <!-- Barra Visual de Turbidez com Marcador -->
+          <div class="turbidity-track" aria-hidden="true">
+            <div id="bar-fill-2" class="turbidity-fill" style="width: 0%;"></div>
+            <span id="marker-calib-2" class="turbidity-marker" style="left: 0%;"></span>
+          </div>
+          <div class="scale-ticks" aria-hidden="true">
+            <span>0% (Limpa)</span>
+            <span>50%</span>
+            <span>100% (Crítica)</span>
+          </div>
+
+          <!-- Grade de Informações Técnicas -->
+          <div class="metrics-grid">
+            <div class="metric-item">
+              <span class="sub-label">Tensão / ADC</span>
+              <strong id="voltage-calib-2" class="sub-value">— V</strong>
+            </div>
+            <div class="metric-item">
+              <span class="sub-label">Índice NTU</span>
+              <strong id="ntu-calib-2" class="sub-value">— NTU</strong>
+            </div>
+            <div class="metric-item metric-item-full">
+              <span class="sub-label">Horário do Registro</span>
+              <small id="time-calib-2" class="sub-value-time">—</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button id="btn-card-calib-2" class="btn btn-card-action" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Registrar Segunda Leitura
+          </button>
+        </div>
+      </article>
+
+      <!-- COLUNA 3: Painel de Histórico Lateral -->
+      <aside class="card history-card" aria-labelledby="history-title">
+        <div class="history-header">
+          <div>
+            <h2 id="history-title" class="history-title">Histórico</h2>
+            <span id="history-count" class="history-count-badge">0 registros</span>
+          </div>
+
+          <div class="history-actions">
+            <button id="btn-export-csv" class="btn-icon-subtle" type="button" title="Exportar histórico em CSV"
+              aria-label="Exportar histórico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+            <button id="btn-clear-history" class="btn-icon-subtle" type="button" title="Limpar histórico de leituras"
+              aria-label="Limpar histórico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="history-scroll-container">
+          <ul id="history-list" class="history-list" aria-live="polite">
+            <li class="history-empty">
+              <span class="empty-icon" aria-hidden="true">💧</span>
+              <p>Nenhuma leitura registrada.</p>
+              <small>Conecte o sensor e clique em Primeira ou Segunda Leitura.</small>
+            </li>
+          </ul>
+        </div>
+
+        <div class="history-footer">
+          <span class="history-legend-item">
+            <span class="dot-legend dot-clean"></span> ≤30% Limpa
+          </span>
+          <span class="history-legend-item">
+            <span class="dot-legend dot-warn"></span> 31-60% Atenção
+          </span>
+          <span class="history-legend-item">
+            <span class="dot-legend dot-danger"></span> >60% Crítico
+          </span>
+        </div>
+      </aside>
+
+    </main>
+
+  </div>
+
+  <!-- MODAL / DIALOG DE CAPTURA COM 5 SEGUNDOS -->
+  <dialog id="calib-dialog" class="calib-modal" aria-labelledby="modal-calib-title">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <span id="modal-eyebrow" class="card-eyebrow">ESTABILIZAÇÃO</span>
+          <h2 id="modal-calib-title" class="modal-title">Leitura do Sensor</h2>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <p id="modal-description" class="modal-description">
+          Mantenha o sensor na mesma posição por 5 segundos.
+        </p>
+
+        <div class="live-reading-box">
+          <span class="live-reading-label">LEITURA EM TEMPO REAL</span>
+          <div class="live-reading-row">
+            <strong id="modal-live-value" class="live-reading-value">— V</strong>
+            <span id="modal-live-status" class="live-reading-tag">Contagem: 5s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- TOAST DE NOTIFICAÇÃO DISCRETO -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+</body>
+
+</html>

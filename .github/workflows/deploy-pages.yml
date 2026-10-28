@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Baixar código
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
@@ -31,7 +31,7 @@ jobs:
       - name: Preparar artefato do site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: frontend/
 
       - name: Publicar no GitHub Pages
         id: deployment
